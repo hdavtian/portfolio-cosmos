@@ -116,6 +116,11 @@ export function ShowcaseIndexPage() {
   const sort: SortKey = isSortKey(searchParams.get("sort"))
     ? (searchParams.get("sort") as SortKey)
     : DEFAULT_SORT;
+  // The core and tech chips are a nice-to-have, so they stay folded behind a
+  // small Filters button. A shared link that already filters opens them, so the
+  // shorter list is explained on arrival.
+  const [filtersOpen, setFiltersOpen] = useState(() => Boolean(coreFilter || techFilter));
+  const activeFilters = [coreFilter, techFilter].filter(Boolean).length;
 
   // Filtered, then ordered. The sort is stable, so projects that tie (the
   // same year, or no year at all) keep the admin's order among themselves;
@@ -408,55 +413,6 @@ export function ShowcaseIndexPage() {
           role="group"
           aria-label="Filter projects"
         >
-          <div className="showcase-filters__row">
-            <span className="showcase-label">Core</span>
-            <div className="showcase-filters__chips">
-              {cores.map((core) => (
-                <button
-                  key={core.name}
-                  type="button"
-                  className="showcase-chip"
-                  aria-pressed={coreFilter === core.name}
-                  style={{ "--chip-color": core.color } as React.CSSProperties}
-                  onClick={() => toggleFilter("core", core.name)}
-                >
-                  {core.name}
-                  <span className="showcase-chip__count">{core.count}</span>
-                </button>
-              ))}
-            </div>
-          </div>
-          <div className="showcase-filters__row">
-            <span className="showcase-label">Tech</span>
-            <div className="showcase-filters__chips">
-              {topTech.map((tech) => (
-                <button
-                  key={tech}
-                  type="button"
-                  className="showcase-chip"
-                  aria-pressed={techFilter === tech}
-                  onClick={() => toggleFilter("tech", tech)}
-                >
-                  {tech}
-                </button>
-              ))}
-              {coreFilter || techFilter ? (
-                <button
-                  type="button"
-                  className="showcase-chip showcase-chip--clear"
-                  onClick={() => {
-                    trackEvent("showcase_filter_clear_click", {
-                      core: coreFilter,
-                      tech: techFilter,
-                    });
-                    updateParams({ core: null, tech: null });
-                  }}
-                >
-                  Clear
-                </button>
-              ) : null}
-            </div>
-          </div>
           <div className="showcase-filters__row showcase-filters__row--sort">
             <span className="showcase-label">Sort</span>
             <div className="showcase-filters__chips showcase-filters__chips--sort">
@@ -490,8 +446,80 @@ export function ShowcaseIndexPage() {
                   ))}
                 </div>
               ))}
+              <button
+                type="button"
+                className="showcase-switch showcase-filter-toggle"
+                aria-expanded={filtersOpen}
+                aria-controls="showcase-filter-panel"
+                onClick={() => {
+                  trackEvent("showcase_filter_panel_toggle", {
+                    action: filtersOpen ? "close" : "open",
+                    active_filters: activeFilters,
+                  });
+                  setFiltersOpen((open) => !open);
+                }}
+              >
+                Filters
+                {activeFilters > 0 ? (
+                  <span className="showcase-filter-toggle__count">{activeFilters}</span>
+                ) : null}
+                <span className="showcase-filter-toggle__caret" aria-hidden="true" />
+              </button>
             </div>
           </div>
+          {filtersOpen ? (
+            <div id="showcase-filter-panel" className="showcase-filters__panel">
+              <div className="showcase-filters__row">
+                <span className="showcase-label">Core</span>
+                <div className="showcase-filters__chips">
+                  {cores.map((core) => (
+                    <button
+                      key={core.name}
+                      type="button"
+                      className="showcase-chip"
+                      aria-pressed={coreFilter === core.name}
+                      style={{ "--chip-color": core.color } as React.CSSProperties}
+                      onClick={() => toggleFilter("core", core.name)}
+                    >
+                      {core.name}
+                      <span className="showcase-chip__count">{core.count}</span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+              <div className="showcase-filters__row">
+                <span className="showcase-label">Tech</span>
+                <div className="showcase-filters__chips">
+                  {topTech.map((tech) => (
+                    <button
+                      key={tech}
+                      type="button"
+                      className="showcase-chip"
+                      aria-pressed={techFilter === tech}
+                      onClick={() => toggleFilter("tech", tech)}
+                    >
+                      {tech}
+                    </button>
+                  ))}
+                  {coreFilter || techFilter ? (
+                    <button
+                      type="button"
+                      className="showcase-chip showcase-chip--clear"
+                      onClick={() => {
+                        trackEvent("showcase_filter_clear_click", {
+                          core: coreFilter,
+                          tech: techFilter,
+                        });
+                        updateParams({ core: null, tech: null });
+                      }}
+                    >
+                      Clear
+                    </button>
+                  ) : null}
+                </div>
+              </div>
+            </div>
+          ) : null}
         </div>
 
         {isLoading && projects.length === 0 ? (
