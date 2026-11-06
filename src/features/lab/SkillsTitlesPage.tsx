@@ -177,17 +177,19 @@ const SHOW_EVERY_MS = 100;
 let filmSeconds = 118;
 
 // The opening, in seconds from Start (HD-9). The sun lights as before. The
-// three bands then forge three times faster than they used to, each starting
-// a little after the one before, and each band's name is etched while the
-// band forms rather than afterwards. The camera sets off halfway through the
-// forging, at twice its old pace, so the whole opening runs about 8.6 seconds
-// where it used to run 21.6.
+// three bands then forge about 2.5 times faster than they used to (three
+// times, then eased back 20% after a look), each starting a little after the
+// one before, and each band's name is etched while the band forms rather
+// than afterwards. The camera sets off halfway through the forging, at twice
+// its old pace, so the whole opening runs about 8.8 seconds where it used to
+// run 21.6.
 const INTRO_SUN: [number, number] = [0, 1.94];
-const INTRO_BANDS: Array<[number, number]> = [
-  [2.16, 2.88],
-  [2.376, 3.096],
-  [2.592, 3.312],
-];
+const BAND_SECONDS = 0.864;
+const BAND_STAGGER = 0.2592;
+const INTRO_BANDS: Array<[number, number]> = [0, 1, 2].map((index) => {
+  const from = 2.16 + index * BAND_STAGGER;
+  return [from, from + BAND_SECONDS];
+});
 // Halfway through the forging: from the first band starting to the last closing.
 const INTRO_CAMERA_FROM = (INTRO_BANDS[0][0] + INTRO_BANDS[2][1]) / 2;
 // The ease back, the pull out and the flight down to the first place, each
