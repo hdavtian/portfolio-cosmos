@@ -1,6 +1,7 @@
 import { useEffect, useMemo } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { resumeSkillLines } from "@hd/content-schema/technology-tree";
+import { isOnResume } from "@hd/resume-export/model";
 import { useReleaseQuery } from "../../../lib/query/contentQueries";
 import { useBackdropTint } from "../lib/backdropTint";
 
@@ -51,7 +52,8 @@ export function ShowcaseResumePage() {
 
   const personal = data.profile;
   const { summary } = data.profile;
-  const { experiences: experience, certifications } = data.collections;
+  const { certifications } = data.collections;
+  const experience = data.collections.experiences.filter(isOnResume);
   const [education] = data.collections.education;
   // The lines are built by the same function the admin's ordering page uses.
   const skills = useMemo(

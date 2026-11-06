@@ -72,6 +72,7 @@ const FIELD_NAMES: Record<string, string> = {
   fontShadow: "glow",
   navLabel: "short name",
   jobMemories: "memories",
+  includeOnResume: "on resume",
   skillsUsed: "skills used",
   isGrouping: "heading",
   surfaces: "shown in",

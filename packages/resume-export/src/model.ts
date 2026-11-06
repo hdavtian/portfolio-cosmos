@@ -28,6 +28,7 @@ export interface ResumeSource {
       location: string;
       startDate: string;
       endDate?: string;
+      includeOnResume?: boolean;
       positions: Array<{ title: string; startDate?: string; endDate?: string; responsibilities: string[] }>;
     }>;
     education: Array<{ sortOrder: number; institution: string; degree: string; major: string; graduationDate: string }>;
@@ -103,9 +104,12 @@ const safeStem = (text: string) =>
     .replace(/[^a-z0-9]+/g, "-")
     .replace(/^-+|-+$/g, "");
 
+/** Whether a job belongs on the resume. Jobs saved before the setting existed count as included. */
+export const isOnResume = (job: { includeOnResume?: boolean }) => job.includeOnResume !== false;
+
 export function resumeModel(source: ResumeSource): ResumeModel {
   const { profile } = source;
-  const jobs = bySortOrder(source.collections.experiences);
+  const jobs = bySortOrder(source.collections.experiences.filter(isOnResume));
   return {
     name: profile.name,
     title: profile.title,

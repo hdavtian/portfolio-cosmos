@@ -1,5 +1,5 @@
 import type { Experience } from "@hd/content-schema";
-import { ButtonComponent } from "@syncfusion/ej2-react-buttons";
+import { ButtonComponent, CheckBoxComponent } from "@syncfusion/ej2-react-buttons";
 import { DropDownListComponent } from "@syncfusion/ej2-react-dropdowns";
 import { TextBoxComponent } from "@syncfusion/ej2-react-inputs";
 import { useState, type ReactNode } from "react";
@@ -36,6 +36,7 @@ const EMPTY: Experience = {
   projects: [],
   jobMemories: [],
   skillsUsed: [],
+  includeOnResume: true,
 };
 
 // How a memory is drawn as it flies past the moon (D13/D14).
@@ -210,6 +211,16 @@ function ExperienceEditor({ initial, initialVersion, updatedBy, isNew }: EditorP
         </Field>
         <Field label="End date" hint="MM/YYYY, or leave blank for a current job" error={fieldErrors.endDate}>
           <TextBoxComponent value={draft.endDate} input={(e: { value: string }) => set("endDate", e.value)} />
+        </Field>
+        <Field
+          label="Resume"
+          hint="Off leaves this job out of the resume download and the /resume page. The cosmos, the film and the moons still show it."
+        >
+          <CheckBoxComponent
+            checked={draft.includeOnResume !== false}
+            label="Include on resume"
+            change={(args: { checked?: boolean }) => set("includeOnResume", Boolean(args.checked))}
+          />
         </Field>
         <Field label="Intro text" hint="Read out by the drone in the cosmos" error={fieldErrors.droneIntroText}>
           <TextBoxComponent

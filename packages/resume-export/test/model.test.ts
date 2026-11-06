@@ -72,6 +72,17 @@ describe("resumeModel", () => {
     expect(named("  Ada  ", "R&D")).toBe("ada-r-d");
     expect(named("Ada", "Full Stack Engineer")).not.toMatch(/[^a-z0-9-]/);
   });
+
+  it("leaves out jobs turned off for the resume, and keeps jobs saved before the setting existed", () => {
+    const [job] = source.collections.experiences;
+    const experiences = [
+      { ...job, sortOrder: 0, company: "Kept by default" },
+      { ...job, sortOrder: 1, company: "Ticked", includeOnResume: true },
+      { ...job, sortOrder: 2, company: "Unticked", includeOnResume: false },
+    ];
+    const model = resumeModel({ ...source, collections: { ...source.collections, experiences } });
+    expect(model.experience.map((j) => j.company)).toEqual(["Kept by default", "Ticked"]);
+  });
 });
 
 describe("resumeText", () => {
