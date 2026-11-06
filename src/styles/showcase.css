@@ -777,6 +777,58 @@ html.is-scene-dragging * {
   outline-offset: 1px;
 }
 
+/* The Filters button matches the sort switches, so it reads as a quiet
+   setting; a small count shows when a filter is on while the chips are
+   folded away. */
+.showcase-filter-toggle {
+  appearance: none;
+  align-items: center;
+  gap: 6px;
+  margin: 0;
+  padding: 3px 8px;
+  background: transparent;
+  color: var(--showcase-ink-quiet);
+  font-family: var(--showcase-mono);
+  font-size: 9.5px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  line-height: 1.4;
+  cursor: pointer;
+  transition: background 160ms ease, color 160ms ease;
+}
+
+.showcase-filter-toggle:hover,
+.showcase-filter-toggle[aria-expanded="true"] {
+  color: var(--showcase-ink, #e8eef6);
+}
+
+.showcase-filter-toggle:focus-visible {
+  outline: 2px solid var(--showcase-ink, #e8eef6);
+  outline-offset: 1px;
+}
+
+.showcase-filter-toggle__count {
+  min-width: 1.4em;
+  padding: 0 3px;
+  background: var(--showcase-ink, #e8eef6);
+  color: #0b0f16;
+  font-variant-numeric: tabular-nums;
+  text-align: center;
+}
+
+.showcase-filter-toggle__caret {
+  width: 5px;
+  height: 5px;
+  border-right: 1px solid currentColor;
+  border-bottom: 1px solid currentColor;
+  transform: translateY(-1px) rotate(45deg);
+  transition: transform 160ms ease;
+}
+
+.showcase-filter-toggle[aria-expanded="true"] .showcase-filter-toggle__caret {
+  transform: translateY(1px) rotate(-135deg);
+}
+
 .showcase-chip:focus-visible,
 .showcase-list__link:focus-visible,
 .showcase-pager:focus-visible {
@@ -797,7 +849,8 @@ html.is-scene-dragging * {
 /* Filters and sort: one labelled row per group, a faint dotted rule between
    them, the labels in a column of their own so wrapped chips line up under
    the first chip rather than under the label. Same sizes as before; only the
-   organisation changes. */
+   organization changes. Sort is always shown; core and tech fold away behind
+   the Filters button at the end of the sort row. */
 .showcase-filters {
   display: grid;
   gap: 0;
@@ -815,7 +868,8 @@ html.is-scene-dragging * {
   padding: 7px 0;
 }
 
-.showcase-filters__row + .showcase-filters__row {
+.showcase-filters__row + .showcase-filters__row,
+.showcase-filters__panel {
   border-top: 1px dotted rgba(244, 241, 236, 0.16);
 }
 
