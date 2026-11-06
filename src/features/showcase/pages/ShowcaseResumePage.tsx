@@ -130,7 +130,7 @@ export function ShowcaseResumePage() {
             {experience.map((job) => (
               <li key={job.slug} className="showcase-resume__job">
                 <header className="showcase-resume__job-head">
-                  <h3 className="showcase-resume__company">{job.navLabel || job.company}</h3>
+                  <h3 className="showcase-resume__company">{job.company}</h3>
                 </header>
                 {job.positions.map((position, index) => (
                   <div key={`${job.slug}-${index}`} className="showcase-resume__position">
