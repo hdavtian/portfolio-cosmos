@@ -86,11 +86,32 @@ export class LatticeFocusPass extends Pass {
 
   private readonly scene: THREE.Scene;
   private readonly camera: THREE.Camera;
+  private readonly maskScale: number;
+  private readonly ownMaterials: boolean;
 
-  constructor(scene: THREE.Scene, camera: THREE.Camera, width: number, height: number) {
+  /**
+   * `maskScale` below 1 draws the mask smaller than the frame; sampled back up,
+   * its edge feathers instead of cutting a hard line (the home-page preview
+   * softens its edges). The universe keeps the full-size mask.
+   *
+   * `ownMaterials` draws the mask with each object's own material instead of
+   * painting everything white: for a scene that puts white stand-ins on
+   * FOCUS_LAYER itself, which works for sprites too (a sprite drawn with a
+   * plain mesh material loses its billboarding and lands in the wrong place).
+   */
+  constructor(
+    scene: THREE.Scene,
+    camera: THREE.Camera,
+    width: number,
+    height: number,
+    maskScale = 1,
+    ownMaterials = false,
+  ) {
     super();
     this.scene = scene;
     this.camera = camera;
+    this.maskScale = maskScale;
+    this.ownMaterials = ownMaterials;
     this.mask = new THREE.WebGLRenderTarget(width, height, { depthBuffer: true });
     this.material = new THREE.ShaderMaterial({
       uniforms: THREE.UniformsUtils.clone(shader.uniforms),
@@ -104,7 +125,10 @@ export class LatticeFocusPass extends Pass {
   }
 
   override setSize(width: number, height: number): void {
-    this.mask.setSize(width, height);
+    this.mask.setSize(
+      Math.max(1, Math.round(width * this.maskScale)),
+      Math.max(1, Math.round(height * this.maskScale)),
+    );
     this.material.uniforms.uAspect.value = width / Math.max(1, height);
   }
 
@@ -123,7 +147,7 @@ export class LatticeFocusPass extends Pass {
     const clearAlphaBefore = renderer.getClearAlpha();
 
     this.camera.layers.set(FOCUS_LAYER);
-    this.scene.overrideMaterial = this.white;
+    this.scene.overrideMaterial = this.ownMaterials ? null : this.white;
     this.scene.background = null;
     renderer.setRenderTarget(this.mask);
     renderer.setClearColor(0x000000, 1);

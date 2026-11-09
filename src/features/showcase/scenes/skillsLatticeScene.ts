@@ -1,17 +1,31 @@
 import type * as THREE from "three";
 import type { TechStackTreeNode } from "@hd/content-schema/tech-stack-tree";
-import type { SceneData, ScenePointer, ShowcaseScene, ThreeModule } from "./types";
+import type { SceneContext, SceneData, ScenePointer, ShowcaseScene, ThreeModule } from "./types";
 
 // A preview of the cinematic Skills Lattice, rebuilt as its own module from the
 // lattice code in ResumeSpace3D.tsx (which stays untouched): cores on a ring,
 // their children orbiting them, deeper levels fanning outward, and data
 // particles flowing along every link. Driven by the published tech stack.
+//
+// HD-10: the camera travels. Every ten seconds it flies to another top-level
+// skill (each once before any repeats) and holds there, with that skill's whole
+// branch in focus - the skill, every node under it, their names and links -
+// and the rest of the lattice soft, wherever it sits in depth. The focus is
+// the universe's own LatticeFocusPass, by membership rather than distance:
+// each node, name and link has an invisible white twin that only the focus
+// mask sees, and only the focused branch's twins are switched on.
 
 const RING_RADIUS = 58;
 const CORE_RADIUS = 3.2;
 const NODE_RADIUS = 1.25;
 const SHELL_RADIUS = 396;
-
+/** Seconds held at a skill, then spent flying to the next: 10s a stop (faster was disorienting). */
+const HOLD_SECONDS = 7.5;
+const FLY_SECONDS = 2.5;
+/** How much of the screen the branch in focus fills (its sphere's share of the narrower field). */
+const FRAME_FILL = 1.3;
+/** The focus mask is drawn at this fraction of the frame, which feathers its edge. */
+const FOCUS_MASK_SCALE = 0.5;
 interface LatticeNode {
   mesh: THREE.Mesh<THREE.BufferGeometry, THREE.MeshBasicMaterial>;
   halo: THREE.Sprite;
@@ -22,6 +36,10 @@ interface LatticeNode {
   baseScale: number;
   /** Keys of this node and its ancestors, for lighting a whole path. */
   pathKeys: string[];
+  /** The top-level skill this node belongs to (its index in the stack). */
+  coreIndex: number;
+  /** White stand-ins drawn only into the focus mask, on while the branch is in focus. */
+  maskTwins: THREE.Object3D[];
 }
 
 interface FlowParticle {
@@ -75,7 +93,20 @@ const makeLabel = (THREE: ThreeModule, text: string, size: number, isCore = true
   return sprite;
 };
 
-export async function createSkillsLatticeScene(THREE: ThreeModule, data: SceneData): Promise<ShowcaseScene> {
+const easeInOut = (t: number) => (t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2);
+
+export async function createSkillsLatticeScene(
+  THREE: ThreeModule,
+  data: SceneData,
+  context: SceneContext,
+): Promise<ShowcaseScene> {
+  // Post-processing loads with this scene, not with the page (three.js is lazy).
+  const [{ EffectComposer }, { RenderPass }, { OutputPass }, { LatticeFocusPass, FOCUS_LAYER }] = await Promise.all([
+    import("three/examples/jsm/postprocessing/EffectComposer.js"),
+    import("three/examples/jsm/postprocessing/RenderPass.js"),
+    import("three/examples/jsm/postprocessing/OutputPass.js"),
+    import("../../../components/cosmos/latticeFocusPass"),
+  ]);
   const scene = new THREE.Scene();
   const camera = new THREE.PerspectiveCamera(55, 1, 0.5, 3000);
   const root = new THREE.Group();
@@ -83,7 +114,8 @@ export async function createSkillsLatticeScene(THREE: ThreeModule, data: SceneDa
 
   const haloTexture = makeHaloTexture(THREE);
   const nodes: LatticeNode[] = [];
-  const segments: Array<{ from: THREE.Vector3; to: THREE.Vector3 }> = [];
+  // `core` is the branch a link belongs to; -1 for the links between skills.
+  const segments: Array<{ from: THREE.Vector3; to: THREE.Vector3; core: number }> = [];
   const disposables: Array<{ dispose: () => void }> = [haloTexture];
 
   // Faint stained-glass wire shell and stars, standing in for the envelope.
@@ -115,6 +147,16 @@ export async function createSkillsLatticeScene(THREE: ThreeModule, data: SceneDa
   );
   scene.add(stars);
   disposables.push(starGeometry, stars.material);
+
+  // What the focus mask draws for a branch in focus: plain white.
+  const maskWhite = new THREE.MeshBasicMaterial({ color: 0xffffff });
+  const maskLineWhite = new THREE.LineBasicMaterial({ color: 0xffffff });
+  disposables.push(maskWhite, maskLineWhite);
+  const maskOnly = <T extends THREE.Object3D>(object: T) => {
+    object.layers.set(FOCUS_LAYER);
+    object.visible = false;
+    return object;
+  };
 
   const coreGeometry = new THREE.IcosahedronGeometry(CORE_RADIUS, 1);
   const coreEdges = new THREE.EdgesGeometry(coreGeometry);
@@ -164,8 +206,22 @@ export async function createSkillsLatticeScene(THREE: ThreeModule, data: SceneDa
     label.position.set(position.x, position.y + radius + (isCore ? 3.4 : 1.8), position.z);
     root.add(label);
 
+    // Mask twins: the node's shape, and its name's letters. Children of what
+    // they stand in for, so they follow its pulse and position.
+    const meshTwin = maskOnly(new THREE.Mesh(geometry, maskWhite));
+    mesh.add(meshTwin);
+    const labelTwinMaterial = new THREE.SpriteMaterial({
+      map: label.material.map,
+      color: 0xffffff,
+      transparent: true,
+      alphaTest: 0.2,
+      depthWrite: false,
+    });
+    const labelTwin = maskOnly(new THREE.Sprite(labelTwinMaterial));
+    label.add(labelTwin);
+
     if (!isCore) disposables.push(geometry, edges.geometry);
-    disposables.push(material, edges.material, halo.material, label.material, label.material.map!);
+    disposables.push(material, edges.material, halo.material, label.material, label.material.map!, labelTwinMaterial);
 
     const node: LatticeNode = {
       mesh,
@@ -176,12 +232,18 @@ export async function createSkillsLatticeScene(THREE: ThreeModule, data: SceneDa
       phase,
       baseScale: 1,
       pathKeys: [...pathKeys, normalize(name)],
+      coreIndex: currentCore,
+      maskTwins: [meshTwin, labelTwin],
     };
     nodes.push(node);
+    // What the camera frames for this branch: the node and the name above it.
+    branchPoints[currentCore]?.push(position.clone(), label.position.clone());
     return node;
   };
 
   const roots = data.techStack;
+  let currentCore = 0;
+  const branchPoints: THREE.Vector3[][] = roots.map(() => []);
   // Cores on a sphere, not a ring (the same layout as the universe's lattice):
   // a Fibonacci spiral spreads them evenly, the radius grows with the count
   // so neighbours stay a branch-width apart, and a jitter seeded from the
@@ -208,7 +270,7 @@ export async function createSkillsLatticeScene(THREE: ThreeModule, data: SceneDa
   // Ring links between neighbouring cores.
   corePositions.forEach((position, index) => {
     if (corePositions.length < 2) return;
-    segments.push({ from: position.clone(), to: corePositions[(index + 1) % corePositions.length].clone() });
+    segments.push({ from: position.clone(), to: corePositions[(index + 1) % corePositions.length].clone(), core: -1 });
   });
 
   // Children orbit their parent; deeper rings tilt away from the grandparent.
@@ -251,12 +313,13 @@ export async function createSkillsLatticeScene(THREE: ThreeModule, data: SceneDa
         .addScaledVector(axisB, Math.sin(angle) * orbit)
         .addScaledVector(outward, depth === 2 ? Math.sin(angle * 1.4) * 2.2 : 0);
       addNode(child.name, position, depth, seed * 2.13 + index * 0.77 + depth * 0.31, pathKeys);
-      segments.push({ from: parentPosition.clone(), to: position.clone() });
+      segments.push({ from: parentPosition.clone(), to: position.clone(), core: currentCore });
       placeChildren(child, position, parentPosition, depth + 1, [...pathKeys, normalize(child.name)], seed + index + 1);
     });
   };
 
   roots.forEach((core, index) => {
+    currentCore = index;
     addNode(core.name, corePositions[index], 1, index * 1.73, []);
     placeChildren(core, corePositions[index], null, 2, [normalize(core.name)], index);
   });
@@ -309,6 +372,126 @@ export async function createSkillsLatticeScene(THREE: ThreeModule, data: SceneDa
   const coreColor = new THREE.Color(0x8fd3ff);
   const nodeColor = new THREE.Color(0xdaf1ff);
 
+  // --- Travel between the top-level skills -------------------------------
+  // One sphere per branch: what the camera frames and what stays in focus.
+  const stops = branchPoints.map((points, index) => {
+    const sphere = new THREE.Sphere().setFromPoints(points.length ? points : [corePositions[index]]);
+    sphere.radius = Math.max(sphere.radius, CORE_RADIUS * 3) + 2.5;
+    return sphere;
+  });
+  const traveling = stops.length > 0;
+
+  // Each skill once, in a random order, before any repeats; never the same twice running.
+  let bag: number[] = [];
+  let stopIndex = -1;
+  const nextStop = () => {
+    if (bag.length === 0) {
+      bag = stops.map((_, index) => index).filter((index) => stops.length < 2 || index !== stopIndex);
+      for (let i = bag.length - 1; i > 0; i -= 1) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [bag[i], bag[j]] = [bag[j], bag[i]];
+      }
+    }
+    return bag.pop() ?? 0;
+  };
+
+  const up = new THREE.Vector3(0, 1, 0);
+  /** Where the camera sits for a stop: outside the branch, three-quarters on, far enough to frame it. */
+  const viewFor = (sphere: THREE.Sphere) => {
+    const outward = sphere.center.lengthSq() > 1e-6 ? sphere.center.clone().normalize() : new THREE.Vector3(0, 0, 1);
+    const direction = outward.applyAxisAngle(up, 0.45);
+    direction.y += 0.28;
+    direction.normalize();
+    const halfVertical = THREE.MathUtils.degToRad(camera.fov) / 2;
+    const halfHorizontal = Math.atan(Math.tan(halfVertical) * camera.aspect);
+    const distance = sphere.radius / (Math.sin(Math.min(halfVertical, halfHorizontal)) * FRAME_FILL);
+    return sphere.center.clone().addScaledVector(direction, distance);
+  };
+
+  const from = { position: new THREE.Vector3(), target: new THREE.Vector3(), radius: 1 };
+  const to = { position: new THREE.Vector3(), target: new THREE.Vector3(), radius: 1 };
+  const view = { position: new THREE.Vector3(), target: new THREE.Vector3(), radius: 1 };
+  let legTime = 0;
+  let flying = false;
+  const beginLeg = (first: boolean) => {
+    stopIndex = nextStop();
+    const sphere = stops[stopIndex];
+    from.position.copy(first ? viewFor(sphere) : view.position);
+    from.target.copy(first ? sphere.center : view.target);
+    from.radius = first ? sphere.radius : view.radius;
+    to.position.copy(viewFor(sphere));
+    to.target.copy(sphere.center);
+    to.radius = sphere.radius;
+    legTime = 0;
+    flying = !first;
+  };
+  if (traveling) beginLeg(true);
+
+  // The path swings round the lattice rather than through it: the direction
+  // turns on a sphere about the centre while the distance eases between the
+  // two, bowing outward mid-flight.
+  const fromDirection = new THREE.Vector3();
+  const toDirection = new THREE.Vector3();
+  const turn = new THREE.Quaternion();
+  const partial = new THREE.Quaternion();
+  const flightPosition = (t: number, out: THREE.Vector3) => {
+    const fromLength = from.position.length();
+    const toLength = to.position.length();
+    fromDirection.copy(from.position).divideScalar(Math.max(1e-6, fromLength));
+    toDirection.copy(to.position).divideScalar(Math.max(1e-6, toLength));
+    turn.setFromUnitVectors(fromDirection, toDirection);
+    partial.identity().slerp(turn, t);
+    const bow = Math.sin(Math.PI * t) * sphereRadius * 0.35;
+    return out
+      .copy(fromDirection)
+      .applyQuaternion(partial)
+      .multiplyScalar(THREE.MathUtils.lerp(fromLength, toLength, t) + bow);
+  };
+
+  // The focus mask: a sphere drawn only into the focus pass (the main render,
+  // on layer 0, never sees it).
+  // Each branch's links, as one white twin for the mask.
+  const linkTwins = roots.map((_, coreIndex) => {
+    const own = segments.filter((segment) => segment.core === coreIndex);
+    const points = new Float32Array(own.length * 6);
+    own.forEach((segment, index) => {
+      points.set([segment.from.x, segment.from.y, segment.from.z, segment.to.x, segment.to.y, segment.to.z], index * 6);
+    });
+    const geometry = new THREE.BufferGeometry();
+    geometry.setAttribute("position", new THREE.BufferAttribute(points, 3));
+    disposables.push(geometry);
+    const twin = maskOnly(new THREE.LineSegments(geometry, maskLineWhite));
+    root.add(twin);
+    return twin;
+  });
+  // Switches the mask twins over to the branch now in focus (-1: none).
+  let maskedCore = -1;
+  const maskBranch = (coreIndex: number) => {
+    if (coreIndex === maskedCore) return;
+    maskedCore = coreIndex;
+    nodes.forEach((node) => {
+      const on = node.coreIndex === coreIndex;
+      node.maskTwins.forEach((twin) => {
+        twin.visible = on;
+      });
+    });
+    linkTwins.forEach((twin, index) => {
+      twin.visible = index === coreIndex;
+    });
+  };
+
+  const { renderer } = context;
+  const composer = new EffectComposer(renderer);
+  composer.addPass(new RenderPass(scene, camera));
+  const drawingSize = renderer.getDrawingBufferSize(new THREE.Vector2());
+  const focusPass = new LatticeFocusPass(scene, camera, drawingSize.x, drawingSize.y, FOCUS_MASK_SCALE, true);
+  composer.addPass(focusPass);
+  const outputPass = new OutputPass();
+  composer.addPass(outputPass);
+  disposables.push(focusPass, outputPass, composer);
+  let focusStrength = 0;
+  const lean = new THREE.Vector3();
+
   return {
     scene,
     camera,
@@ -317,25 +500,63 @@ export async function createSkillsLatticeScene(THREE: ThreeModule, data: SceneDa
       if (!visible) return;
       time += dt;
 
-      // Slow orbit around the lattice, steered by the pointer.
-      azimuth += dt * 0.06;
-      const targetElevation = 0.42 - pointer.y * 0.5;
-      elevation += (targetElevation - elevation) * (1 - Math.exp(-2 * dt));
-      const angle = azimuth + pointer.x * 0.9;
-      // Far enough to hold the whole sphere and its branches in frame.
-      const distance = sphereRadius * 1.85 + Math.sin(time * 0.08) * 10;
-      camera.position.set(
-        Math.cos(angle) * Math.cos(elevation) * distance,
-        Math.sin(elevation) * distance,
-        Math.sin(angle) * Math.cos(elevation) * distance,
-      );
-      camera.lookAt(0, 0, 0);
+      let focusedCore = -1;
+      if (traveling) {
+        legTime += dt;
+        if (flying) {
+          const t = Math.min(1, legTime / FLY_SECONDS);
+          const eased = easeInOut(t);
+          flightPosition(eased, view.position);
+          view.target.lerpVectors(from.target, to.target, eased);
+          view.radius = THREE.MathUtils.lerp(from.radius, to.radius, eased);
+          // Focus lets go on the way and takes hold again on arrival.
+          const want = 1 - Math.sin(Math.PI * t) * 0.85;
+          focusStrength += (want - focusStrength) * (1 - Math.exp(-10 * dt));
+          focusedCore = t < 0.5 ? -1 : stopIndex;
+          if (t >= 1) {
+            flying = false;
+            legTime = 0;
+          }
+        } else {
+          view.position.copy(to.position);
+          view.target.copy(to.target);
+          view.radius = to.radius;
+          focusStrength += (1 - focusStrength) * (1 - Math.exp(-4 * dt));
+          focusedCore = stopIndex;
+          if (legTime >= HOLD_SECONDS) beginLeg(false);
+        }
+
+        // A slow sway round the skill, and the pointer leans the view.
+        lean.copy(view.position).sub(view.target);
+        lean.applyAxisAngle(up, Math.sin(time * 0.25) * 0.12 + pointer.x * 0.7);
+        lean.y -= pointer.y * view.radius * 1.2;
+        camera.position.copy(view.target).add(lean);
+        // The skill sits in the middle of the screen.
+        camera.lookAt(view.target);
+        maskBranch(focusedCore);
+        focusPass.strength = focusStrength;
+      } else {
+        // Nothing to travel to: the slow orbit round the whole lattice.
+        azimuth += dt * 0.06;
+        const targetElevation = 0.42 - pointer.y * 0.5;
+        elevation += (targetElevation - elevation) * (1 - Math.exp(-2 * dt));
+        const angle = azimuth + pointer.x * 0.9;
+        const distance = sphereRadius * 1.85 + Math.sin(time * 0.08) * 10;
+        camera.position.set(
+          Math.cos(angle) * Math.cos(elevation) * distance,
+          Math.sin(elevation) * distance,
+          Math.sin(angle) * Math.cos(elevation) * distance,
+        );
+        camera.lookAt(0, 0, 0);
+        focusPass.strength = 0;
+      }
       shell.rotation.y += dt * 0.01;
 
       const highlighting = lit.size > 0;
       nodes.forEach((node) => {
         const isLit = lit.has(node.key);
         const onPath = litPaths.has(node.key);
+        const inFocus = node.coreIndex === focusedCore;
         const pulse = 1 + Math.sin(time * 1.7 + node.phase) * 0.08;
         const boost = isLit ? 1.6 : onPath ? 1.15 : 1;
         node.mesh.scale.setScalar(node.baseScale * pulse * boost);
@@ -348,7 +569,10 @@ export async function createSkillsLatticeScene(THREE: ThreeModule, data: SceneDa
         if (node.label) {
           // Children keep a quiet label of their own, so the tree can be read
           // without hovering; it steps back while a project is highlighted.
-          const target = isLit ? 1 : node.depth === 1 ? (highlighting ? 0.35 : 0.75) : highlighting ? 0.12 : 0.42;
+          // The branch in focus reads clearly.
+          const resting = node.depth === 1 ? (highlighting ? 0.35 : 0.75) : highlighting ? 0.12 : 0.42;
+          const focused = node.depth === 1 ? 1 : highlighting ? 0.45 : 0.85;
+          const target = isLit ? 1 : inFocus ? focused : resting;
           node.label.material.opacity += (target - node.label.material.opacity) * (1 - Math.exp(-6 * dt));
         }
       });
@@ -363,9 +587,16 @@ export async function createSkillsLatticeScene(THREE: ThreeModule, data: SceneDa
       });
       positions.needsUpdate = true;
     },
+    render() {
+      composer.render();
+    },
     resize(width: number, height: number) {
       camera.aspect = width / Math.max(1, height);
       camera.updateProjectionMatrix();
+      composer.setPixelRatio(renderer.getPixelRatio());
+      composer.setSize(width, height);
+      // The framing depends on the aspect: re-frame the stop being held.
+      if (traveling && !flying && stopIndex >= 0) to.position.copy(viewFor(stops[stopIndex]));
     },
     setHighlights(technologies: string[]) {
       lit = new Set(technologies.map(normalize));

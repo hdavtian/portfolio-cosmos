@@ -15,6 +15,8 @@ export interface ScenePointer {
 export interface SceneJob {
   slug: string;
   company: string;
+  /** Short name, as the universe labels the job's moon. */
+  navLabel?: string;
   location?: string;
   startDate?: string;
   endDate?: string;
@@ -91,12 +93,28 @@ export interface ShowcaseScene {
   setHighlights?(technologies: string[]): void;
   /** Project open on the page (scenes may bring it into view). */
   setFocusProject?(projectId: string | null): void;
+  /**
+   * Draws the frame, for a scene that needs more than one plain render (post
+   * effects). The host has already applied the visitor's zoom and look-around
+   * to the camera. Without it the host renders the scene directly.
+   */
+  render?(renderer: THREE.WebGLRenderer): void;
   dispose(): void;
+}
+
+/** Where on the site a preview can be seen in full. */
+export interface SceneDestination {
+  /** Route the link opens. */
+  to: string;
+  /** The link's words, e.g. "Go to the Universe and visit Skills". */
+  text: string;
 }
 
 export interface SceneDefinition {
   id: string;
   /** Name in the switcher, e.g. "Career gallery". */
   label: string;
+  /** The place on the site this preview comes from. */
+  destination(data: SceneData): SceneDestination;
   create(three: ThreeModule, data: SceneData, context: SceneContext): Promise<ShowcaseScene>;
 }

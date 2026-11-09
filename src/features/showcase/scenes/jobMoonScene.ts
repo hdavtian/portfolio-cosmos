@@ -7,7 +7,7 @@ import type { SceneData, SceneJob, ScenePointer, ShowcaseScene, ThreeModule } fr
 // details open: Matrix rain washes over the view and the job's card resolves
 // (company, dates, roles, intro and tech), before the memories start again.
 
-const JOB_ID = "investcloud";
+export const JOB_ID = "investcloud";
 const MOON_RADIUS = 60;
 /** Same textures the cinematic moons use. */
 const MOON_TEXTURES: Record<string, string> = {
