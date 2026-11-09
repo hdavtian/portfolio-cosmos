@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
+import { Link } from "react-router-dom";
 import type { TechStackTreeNode } from "@hd/content-schema/tech-stack-tree";
 import type { ShowcaseProject } from "../lib/useShowcaseProjects";
 import { SCENE_DEFINITIONS } from "../scenes/registry";
@@ -75,7 +76,18 @@ const PAGE_CONTENT_SELECTOR = [
   "[data-scene-block]",
 ].join(",");
 
-const isSceneSurface = (target: EventTarget | null) =>
+const PLATE_STORAGE_KEY = "showcase:previews-open";
+
+/** The previews list starts closed; a visitor who opens it finds it open next time. */
+const readPlatePreference = () => {
+  try {
+    return localStorage.getItem(PLATE_STORAGE_KEY) === "open";
+  } catch {
+    return false;
+  }
+};
+
+const isSceneSurface =(target: EventTarget | null) =>
   target instanceof Element && !target.closest(PAGE_CONTENT_SELECTOR);
 
 const readTourPreference = () => {
@@ -101,6 +113,7 @@ export function SceneStage({ projects, techStack, highlights, portfolio, profile
   const [activeId, setActiveId] = useState<string | null>(null);
   const [transition, setTransition] = useState<"leaving" | "entering" | null>(null);
   const [autoTour, setAutoTour] = useState(readTourPreference);
+  const [plateOpen, setPlateOpen] = useState(readPlatePreference);
 
   // Live values for the render loop, which is set up once.
   const scenesRef = useRef(new Map<string, ShowcaseScene>());
@@ -175,6 +188,14 @@ export function SceneStage({ projects, techStack, highlights, portfolio, profile
       // Preference just isn't remembered.
     }
   }, [autoTour]);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(PLATE_STORAGE_KEY, plateOpen ? "open" : "closed");
+    } catch {
+      // Preference just isn't remembered.
+    }
+  }, [plateOpen]);
 
   useEffect(() => {
     const host = hostRef.current;
@@ -363,7 +384,8 @@ export function SceneStage({ projects, techStack, highlights, portfolio, profile
             camera.rotateX(view.pitch);
             camera.updateMatrixWorld();
           }
-          renderer.render(active.scene, camera);
+          if (active.render) active.render(renderer);
+          else renderer.render(active.scene, camera);
           if (quaternion) {
             camera.fov = fov;
             camera.updateProjectionMatrix();
@@ -437,6 +459,16 @@ export function SceneStage({ projects, techStack, highlights, portfolio, profile
     };
   }, [hasData, switchTo]);
 
+  const activeDefinition = SCENE_DEFINITIONS.find((definition) => definition.id === activeId) ?? null;
+  const activeDestination = activeDefinition?.destination({
+    profile: profile ?? { name: "", title: "" },
+    projects,
+    techStack: techStack ?? [],
+    portfolio: portfolio ?? EMPTY_PORTFOLIO,
+    jobs,
+    skills,
+  });
+
   return (
     <>
       <div
@@ -456,7 +488,8 @@ export function SceneStage({ projects, techStack, highlights, portfolio, profile
       </div>
 
       <aside className="showcase-scene-panel" aria-label="Universe scenes" hidden={!showPanel}>
-      <div className="showcase-scene-plate">
+      {/* HD-10: the list is tucked behind the gear below; most visitors never need it. */}
+      <div className="showcase-scene-plate" id="showcase-scene-plate" hidden={!plateOpen}>
         <p className="showcase-scene-plate__title">Background previews</p>
         <ol className="showcase-scene-switcher" aria-label="Background previews">
           {SCENE_DEFINITIONS.map((definition, index) => {
@@ -516,6 +549,47 @@ export function SceneStage({ projects, techStack, highlights, portfolio, profile
         >
           Auto tour {autoTour ? "on" : "off"}
         </button>
+      </div>
+
+      <div className="showcase-scene-footer">
+      {activeDefinition && activeDestination ? (
+        // Where the preview playing now can be seen in full. Not dimmed like
+        // the plate: it is the one thing here meant to be read.
+        <p className="showcase-scene-goto" key={activeDefinition.id}>
+          <span className="showcase-scene-goto__now">Now showing: {activeDefinition.label}</span>
+          <Link
+            className="showcase-scene-goto__link"
+            to={activeDestination.to}
+            onClick={() =>
+              trackEvent("showcase_background_preview_goto", {
+                scene_id: activeDefinition.id,
+                scene_label: activeDefinition.label,
+                destination: activeDestination.to,
+              })
+            }
+          >
+            {activeDestination.text}
+            <span className="showcase-scene-goto__arrow" aria-hidden="true">→</span>
+          </Link>
+        </p>
+      ) : null}
+      <button
+        type="button"
+        className={`showcase-scene-gear${plateOpen ? " is-open" : ""}`}
+        aria-expanded={plateOpen}
+        aria-controls="showcase-scene-plate"
+        aria-label={plateOpen ? "Hide background previews" : "Show background previews"}
+        title={plateOpen ? "Hide background previews" : "Background previews"}
+        onClick={() => setPlateOpen((value) => !value)}
+      >
+        <svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true">
+          <path
+            fill="currentColor"
+            d="M19.4 13a7.5 7.5 0 0 0 0-2l2.1-1.6-2-3.5-2.5 1a7.4 7.4 0 0 0-1.7-1L15 3.3h-4l-.4 2.6a7.4 7.4 0 0 0-1.7 1l-2.5-1-2 3.5L6.6 11a7.5 7.5 0 0 0 0 2l-2.1 1.6 2 3.5 2.5-1a7.4 7.4 0 0 0 1.7 1l.4 2.6h4l.4-2.6a7.4 7.4 0 0 0 1.7-1l2.5 1 2-3.5L19.4 13ZM13 15.5a3.5 3.5 0 1 1 0-7 3.5 3.5 0 0 1 0 7Z"
+            transform="translate(-1 0)"
+          />
+        </svg>
+      </button>
       </div>
 
       </aside>

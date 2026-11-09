@@ -468,6 +468,115 @@ html.is-scene-dragging * {
   color: rgb(var(--scene-green-bright));
 }
 
+/*
+ * HD-10: under the plate, where the preview playing now can be seen in full.
+ * Brighter than the dimmed plate (it is meant to be read), still quieter than
+ * the page. It fades in with each new preview.
+ */
+/* The list stays closed behind the gear until asked for. */
+.showcase-scene-plate[hidden] {
+  display: none;
+}
+
+/* The foot of the corner: what's playing and where to see it, and under it,
+   apart, the gear. */
+.showcase-scene-footer {
+  display: grid;
+  justify-items: end;
+  gap: 14px;
+}
+
+.showcase-scene-gear {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 18px;
+  height: 18px;
+  padding: 0;
+  color: rgba(var(--scene-green), 0.45);
+  background: none;
+  border: 0;
+  cursor: pointer;
+  transition: color 220ms ease, transform 420ms ease;
+}
+
+.showcase-scene-gear:hover,
+.showcase-scene-gear.is-open {
+  color: rgb(var(--scene-green-bright));
+}
+
+.showcase-scene-gear:hover {
+  transform: rotate(45deg);
+}
+
+.showcase-scene-gear:focus-visible {
+  outline: 1px solid rgb(var(--scene-green-bright));
+  outline-offset: 3px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .showcase-scene-gear:hover { transform: none; }
+}
+
+.showcase-scene-goto {
+  margin: 0;
+  display: grid;
+  justify-items: end;
+  gap: 5px;
+  text-align: right;
+  animation: showcase-scene-goto-in 700ms ease both;
+}
+
+.showcase-scene-goto__now {
+  font-size: 10px;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: rgba(var(--scene-green), 0.55);
+}
+
+.showcase-scene-goto__link {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 8px;
+  font-size: 14px;
+  letter-spacing: 0.04em;
+  line-height: 1.35;
+  color: rgba(var(--scene-green-bright), 0.82);
+  text-decoration: none;
+  border-bottom: 1px dashed rgba(var(--scene-green), 0.35);
+  padding-bottom: 2px;
+  transition: color 220ms ease, border-color 220ms ease, text-shadow 220ms ease;
+}
+
+.showcase-scene-goto__link:hover,
+.showcase-scene-goto__link:focus-visible {
+  color: rgb(var(--scene-green-bright));
+  border-bottom-color: rgba(var(--scene-green-bright), 0.8);
+  text-shadow: 0 0 10px rgba(var(--scene-green), 0.5);
+}
+
+.showcase-scene-goto__link:focus-visible {
+  outline: 1px solid rgb(var(--scene-green-bright));
+  outline-offset: 3px;
+}
+
+.showcase-scene-goto__arrow {
+  transition: transform 220ms ease;
+}
+
+.showcase-scene-goto__link:hover .showcase-scene-goto__arrow {
+  transform: translateX(3px);
+}
+
+@keyframes showcase-scene-goto-in {
+  from { opacity: 0; transform: translateY(4px); }
+  to { opacity: 1; transform: none; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .showcase-scene-goto { animation: none; }
+}
+
 /* Gateway into the full Three.js experience: under the site buttons, top right. */
 .showcase-gateway {
   position: relative;

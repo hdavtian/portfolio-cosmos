@@ -172,6 +172,7 @@ export function ShowcaseLayout() {
       return {
         slug: entry.slug,
         company: entry.company,
+        navLabel: entry.navLabel,
         location: entry.location,
         startDate: entry.startDate,
         endDate: entry.endDate,
