@@ -88,17 +88,27 @@ const PLATE_STORAGE_KEY = "showcase:previews-open";
 const PEEK_STORAGE_KEY = "showcase:quick-peek";
 /** How long each scene plays in the peek (longer only while the next one loads). */
 const PEEK_SLOT_MS = 4_000;
-/** Lens narrowing over the peek: the field of view ends at this fraction. */
-const PEEK_ZOOM_END = 0.7;
-/** The zoom reaches PEEK_ZOOM_END after this long, at a constant rate. */
-const PEEK_ZOOM_SPAN_MS = PEEK_SLOT_MS * 7;
+/*
+ * One slow sideways slide across the whole peek: the picture is scaled up a
+ * little and drifts from one side to the other, in screen space, so it carries
+ * straight through every cut whatever each scene's own camera does. (It
+ * replaced a lens zoom, which the scenes' own camera moves drowned out.)
+ */
+const PEEK_SLIDE_SCALE = 1.14;
+/** Drift, in percent of the screen width, each side of center (under the 7% the scale leaves). */
+const PEEK_SLIDE_TRAVEL = 6;
+/** The slide crosses from one side to the other in this long, at a constant rate. */
+const PEEK_SLIDE_SPAN_MS = PEEK_SLOT_MS * 7;
 /** The flash; the first scene is switched in under its peak. */
 const BOOM_MS = 1_700;
 const BOOM_SWITCH_MS = 520;
 /** The quick cut between peek scenes. */
 const CUT_MS = 320;
-/** Scenes run this many times faster during the peek (whole steps, so no scene sees a big dt). */
-const PEEK_SPEED = 3;
+/**
+ * Scenes run this many times faster during the peek, as ordinary steps plus
+ * one partial step per frame, so no scene sees a bigger step than usual.
+ */
+const PEEK_SPEED = 2.3;
 /**
  * The per-scene titles (PeekTitle). Off since HD-12 review: they pulled the eye
  * away from the scenes, and the names mean little to visitors. True brings them back.
@@ -202,6 +212,7 @@ export function SceneStage({ projects, techStack, highlights, portfolio, profile
     firstReadyAt: 0,
   });
   const fxRef = useRef<HTMLCanvasElement>(null);
+  const slideRef = useRef<HTMLDivElement>(null);
   const cancelTransitionRef = useRef<CancelTransition | null>(null);
   const barRef = useRef<HTMLDivElement>(null);
   const cutRef = useRef<HTMLDivElement>(null);
@@ -401,8 +412,11 @@ export function SceneStage({ projects, techStack, highlights, portfolio, profile
       window.addEventListener("pointercancel", onPointerUp);
       let viewSceneId: string | null = null;
       const worldUp = new THREE.Vector3(0, 1, 0);
-      // The peek's slow lens zoom, eased back to 1 when the peek ends.
-      let peekZoom = 1;
+      // The peek's slide: how far across it is (0..1), and how much of it is
+      // applied (1 in the peek, eased to 0 after, dropped at once under the flash).
+      const slideDirection = Math.random() < 0.5 ? 1 : -1;
+      let slidePresence = 0;
+      let slideWritten = "";
       const failed = failedRef.current;
       const nextPeekScene = (id: string) => nextPeekSceneAfter(id, failed);
 
@@ -448,8 +462,10 @@ export function SceneStage({ projects, techStack, highlights, portfolio, profile
           const progress = scene.progress();
           if (definition.id === activeRef.current) {
             // The peek plays each scene fast: several ordinary steps per frame.
-            const steps = peekRef.current.phase === "preview" ? PEEK_SPEED : 1;
-            for (let step = 0; step < steps; step += 1) scene.update(dt, smoothed, true);
+            const speed = peekRef.current.phase === "preview" ? PEEK_SPEED : 1;
+            for (let step = 0; step < Math.floor(speed); step += 1) scene.update(dt, smoothed, true);
+            const partial = speed - Math.floor(speed);
+            if (partial > 0.001) scene.update(dt * partial, smoothed, true);
           } else if (progress < 1 && preloadTick) {
             scene.update(preloadDt, smoothed, false);
           }
@@ -549,7 +565,7 @@ export function SceneStage({ projects, techStack, highlights, portfolio, profile
           peek.boom += frameMs;
           if (!peek.switched && peek.boom >= BOOM_SWITCH_MS) {
             peek.switched = true;
-            peekZoom = 1;
+            slidePresence = 0;
             const first = SCENE_DEFINITIONS.find((definition) => (scenesRef.current.get(definition.id)?.progress() ?? 0) >= 1);
             if (first && first.id !== activeRef.current) cutTo(first.id);
             activeSinceRef.current = now;
@@ -559,12 +575,23 @@ export function SceneStage({ projects, techStack, highlights, portfolio, profile
             setPeek("done");
           }
         }
-        const zoomingIn = peek.phase === "preview" || (peek.phase === "boom" && !peek.switched);
-        if (zoomingIn) {
-          peekZoom = Math.max(PEEK_ZOOM_END, 1 - (1 - PEEK_ZOOM_END) * (peek.total / PEEK_ZOOM_SPAN_MS));
-        } else if (peekZoom !== 1) {
-          peekZoom += (1 - peekZoom) * (1 - Math.exp(-2.5 * dt));
-          if (Math.abs(1 - peekZoom) < 0.0005) peekZoom = 1;
+        const sliding = peek.phase === "preview" || (peek.phase === "boom" && !peek.switched);
+        if (sliding) {
+          slidePresence = 1;
+        } else if (slidePresence > 0) {
+          slidePresence *= Math.exp(-2.5 * dt);
+          if (slidePresence < 0.002) slidePresence = 0;
+        }
+        const slideEl = slideRef.current;
+        if (slideEl) {
+          const across = Math.min(1, peek.total / PEEK_SLIDE_SPAN_MS);
+          const x = slideDirection * PEEK_SLIDE_TRAVEL * (1 - 2 * across) * slidePresence;
+          const scale = 1 + (PEEK_SLIDE_SCALE - 1) * slidePresence;
+          const transform = slidePresence > 0 ? `translateX(${x.toFixed(3)}%) scale(${scale.toFixed(4)})` : "";
+          if (transform !== slideWritten) {
+            slideEl.style.transform = transform;
+            slideWritten = transform;
+          }
         }
 
         // Duration bar along the top: the peek slot, then the tour interval.
@@ -617,7 +644,7 @@ export function SceneStage({ projects, techStack, highlights, portfolio, profile
 
           // Applied just for this render, so scenes keep their own camera state.
           const { camera } = active;
-          const lens = view.zoom * peekZoom;
+          const lens = view.zoom;
           const adjusted =
             Math.abs(lens - 1) > 0.001 || Math.abs(view.yaw) > 0.0005 || Math.abs(view.pitch) > 0.0005;
           const fov = camera.fov;
@@ -729,7 +756,10 @@ export function SceneStage({ projects, techStack, highlights, portfolio, profile
           .join(" ")}
         aria-hidden="true"
       >
-        <div ref={hostRef} className="showcase-scenes__canvas" />
+        {/* The peek's slow slide moves this layer; transitions animate the one inside. */}
+        <div ref={slideRef} className="showcase-scenes__slide">
+          <div ref={hostRef} className="showcase-scenes__canvas" />
+        </div>
         <div className="showcase-scenes__mood" />
         <div className="showcase-scenes__mood showcase-scenes__mood--lift" />
         <div className="showcase-scenes__shade" />

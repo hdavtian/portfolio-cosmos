@@ -8,6 +8,13 @@
   pointer-events: none;
 }
 
+/* Carries the peek's slow sideways slide (set from the render loop). */
+.showcase-scenes__slide {
+  position: absolute;
+  inset: 0;
+  will-change: transform;
+}
+
 /* The overlay the peek transitions draw on (lines, sparks, snow, bars). */
 .showcase-scenes__fx {
   position: absolute;
