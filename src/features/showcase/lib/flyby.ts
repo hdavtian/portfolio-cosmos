@@ -3,11 +3,11 @@ import type * as THREE from "three";
 type ThreeModule = typeof import("three");
 
 /**
- * HD-12: a freighter that now and then flies past over whatever scene is
- * showing, in the quick peek and the slow tour. It is an original ship in the
- * spirit of the classic battered space freighter (a disc hull, a cockpit pod
- * out to one side, split cargo prongs at the front, a blue engine strip),
- * built from plain geometry, so there is no model file and no license.
+ * HD-12: the freighter that now and then flies past over whatever scene is
+ * showing, in the quick peek and the slow tour. It is the same ship model the
+ * Universe flies (loaded late, a few seconds after the first scene shows, and
+ * shared with the Universe through the browser cache). If the model can't be
+ * loaded, an original ship built from plain geometry stands in (buildShip).
  *
  * It has its own small scene, camera and renderer, drawing on its own
  * transparent canvas laid over the scene layer, so no scene had to change.
@@ -17,7 +17,9 @@ type ThreeModule = typeof import("three");
  */
 
 export interface Flyby {
-  /** Starts a pass now, unless one is already flying. */
+  /** Starts loading the ship model (once); passes wait until it is in. */
+  preload(): void;
+  /** Starts a pass now, unless one is already flying or the ship isn't ready. */
   launch(): void;
   /** Whether a pass is on screen. */
   readonly flying: boolean;
@@ -30,7 +32,7 @@ export interface Flyby {
 
 const rand = (min: number, max: number) => min + Math.random() * (max - min);
 
-/** The ship, about 6 units across, nose along -Z. */
+/** The stand-in ship, about 6 units across, nose along -Z. */
 function buildShip(THREE: ThreeModule) {
   const ship = new THREE.Group();
   const hullMaterial = new THREE.MeshStandardMaterial({ color: "#b9b6ae", roughness: 0.72, metalness: 0.25, flatShading: true });
@@ -130,146 +132,271 @@ function glowTexture(THREE: ThreeModule) {
   return texture;
 }
 
-/**
- * The kinds of pass, as points in camera space (camera at the origin looking
- * down -Z), so they read the same over every scene.
- */
-type PassKind = "cross" | "overShoulder" | "headOn" | "climb" | "weave";
-const PASSES: PassKind[] = ["cross", "overShoulder", "headOn", "climb", "weave"];
+/** The real ship: the same model the Universe flies, shared through the browser cache. */
+const SHIP_MODEL_URL = "/models/falcon2/falcon2.glb";
+/** The ship's length, in the fly-by's units (the passes are laid out for this). */
+const SHIP_SIZE = 7;
+/** Imported engines can be authored very bright; capped so the grille stays readable. */
+const MAX_EMISSIVE = 1.2;
 
-function passPoints(THREE: ThreeModule, kind: PassKind): { points: THREE.Vector3[]; seconds: number } {
+/** Loads and prepares the model the way the Universe does: fitted, centered, gear up. */
+async function loadShipModel(THREE: ThreeModule) {
+  const { GLTFLoader } = await import("three/examples/jsm/loaders/GLTFLoader.js");
+  const gltf = await new GLTFLoader().loadAsync(SHIP_MODEL_URL);
+  const model = gltf.scene;
+  const box = new THREE.Box3().setFromObject(model);
+  const size = box.getSize(new THREE.Vector3());
+  model.scale.setScalar(SHIP_SIZE / Math.max(size.x, size.y, size.z, 0.0001));
+  box.setFromObject(model);
+  model.position.sub(box.getCenter(new THREE.Vector3()));
+  const engines: Array<{ material: THREE.MeshStandardMaterial; base: number }> = [];
+  model.traverse((object) => {
+    // Always in flight here: no landing gear.
+    if (/landing[\s_]*gear/i.test(object.name)) object.visible = false;
+    const mesh = object as THREE.Mesh;
+    if (!mesh.isMesh) return;
+    for (const material of Array.isArray(mesh.material) ? mesh.material : [mesh.material]) {
+      const standard = material as THREE.MeshStandardMaterial;
+      if (!standard.isMeshStandardMaterial) continue;
+      standard.emissiveIntensity = Math.min(standard.emissiveIntensity, MAX_EMISSIVE);
+      // The hull's emissive map is black except the engine grille.
+      if (standard.emissiveMap) engines.push({ material: standard, base: standard.emissiveIntensity });
+    }
+  });
+  const ship = new THREE.Group();
+  ship.add(model);
+  box.setFromObject(ship);
+  // The model's nose is +Z, so the engines are at the back, -Z.
+  return { ship, engines, rearZ: box.min.z };
+}
+
+/*
+ * Flight. A ship this heavy doesn't follow a curve drawn through points: it
+ * holds a steady cruise speed along its heading and changes heading only at a
+ * limited turn rate, so it flies straight lines and wide arcs. It banks into
+ * each turn by the coordinated-turn angle, atan(turn rate x speed / g), eased
+ * in and out, and pitches only gently. Passes are set up in camera space
+ * (camera at the origin, looking down -Z), so they read the same over every
+ * scene, and mirrored left/right at random.
+ */
+interface Pass {
+  position: THREE.Vector3;
+  heading: THREE.Vector3;
+  /** Cruise speed, units per second. */
+  speed: number;
+  /** Turn rate (radians/second about world up; positive turns left) over time. */
+  yawRate: (t: number) => number;
+  /** Pitch rate (radians/second; positive noses up) over time. */
+  pitchRate: (t: number) => number;
+}
+
+/** "g" for the bank angle: tuned so a 0.5 rad/s turn at speed 50 banks about 40 degrees. */
+const BANK_G = 30;
+const MAX_BANK = 1.0;
+
+const smooth = (from: number, to: number, t: number) => {
+  const x = Math.max(0, Math.min(1, (t - from) / Math.max(1e-6, to - from)));
+  return x * x * (3 - 2 * x);
+};
+/** A rate that eases in at `from`, holds, and eases out after `to`. */
+const turn = (rate: number, from: number, to: number) => (t: number) =>
+  rate * smooth(from, from + 0.7, t) * (1 - smooth(to, to + 0.7, t));
+const none = () => 0;
+
+type PassKind = "flyover" | "overShoulder" | "passBy" | "bankAway" | "climbOut";
+const PASSES: PassKind[] = ["flyover", "overShoulder", "passBy", "bankAway", "climbOut"];
+
+function makePass(THREE: ThreeModule, kind: PassKind): Pass {
   const side = Math.random() < 0.5 ? 1 : -1;
   const v = (x: number, y: number, z: number) => new THREE.Vector3(x * side, y, z);
   switch (kind) {
-    case "cross":
-      // Across the screen at mid distance, dipping and banking.
+    case "flyover":
+      // Across the view at mid distance, easing into a gentle curve away.
       return {
-        points: [v(-60, rand(-4, 6), -55), v(-18, rand(-6, 2), -40), v(14, rand(0, 8), -38), v(70, rand(-2, 8), -60)],
-        seconds: rand(2.6, 3.4),
+        position: v(-75, rand(-3, 9), -60),
+        heading: v(1, 0.02, -0.12).normalize(),
+        speed: 46,
+        yawRate: turn(side * 0.14, 1.0, 3.5),
+        pitchRate: none,
       };
     case "overShoulder":
-      // From behind the viewer, over the shoulder, away into the scene.
+      // From behind the viewer, out over their shoulder and away, then a
+      // banked turn as it recedes.
       return {
-        points: [v(8, 4, 12), v(5, 1, -6), v(-2, -1, -40), v(-10, 3, -140)],
-        seconds: rand(2.6, 3.2),
+        position: v(9, 4, 16),
+        heading: v(-0.14, -0.05, -1).normalize(),
+        speed: 52,
+        yawRate: turn(side * 0.42, 1.0, 4),
+        pitchRate: none,
       };
-    case "headOn":
-      // Far off, straight at the viewer, then a hard peel away past one side.
+    case "passBy": {
+      // Far off, coming at the viewer, and roaring past close to one side.
+      const position = v(-6, -1, -260);
       return {
-        points: [v(-4, 2, -170), v(-1, 0, -60), v(5, -2, -16), v(30, -8, 10)],
-        seconds: rand(2.4, 3),
+        position,
+        heading: v(18, 5, 20).sub(position).normalize(),
+        speed: 68,
+        yawRate: turn(side * 0.1, 2.6, 5),
+        pitchRate: turn(0.05, 2.6, 5),
       };
-    case "climb":
-      // Low on one side, climbing steeply across and out of the top.
+    }
+    case "bankAway":
+      // In from one side heading slightly toward the viewer, then a hard
+      // banked turn that carries it away into the distance.
       return {
-        points: [v(-40, -26, -60), v(-10, -12, -46), v(10, 6, -44), v(30, 34, -70)],
-        seconds: rand(2.6, 3.2),
+        position: v(-60, -3, -75),
+        heading: v(1, 0.04, 0.35).normalize(),
+        speed: 50,
+        yawRate: turn(side * 0.55, 0.6, 4.5),
+        pitchRate: turn(0.04, 0.6, 3),
       };
     default:
-      // Close and fast, weaving left and right as it goes.
+      // Low on one side, climbing across the view and out of the top, leveling a little.
       return {
-        points: [v(-50, 0, -34), v(-20, 5, -26), v(-2, -4, -24), v(18, 4, -26), v(55, -2, -36)],
-        seconds: rand(2.4, 3),
+        position: v(-50, -32, -75),
+        heading: v(0.8, 0.42, -0.25).normalize(),
+        speed: 50,
+        yawRate: turn(-side * 0.08, 0.5, 3),
+        pitchRate: turn(-0.06, 0.8, 3),
       };
   }
 }
+
+/** A pass ends once the ship has been seen and has left the view (or after this long). */
+const PASS_MAX_SECONDS = 8;
 
 export function createFlyby(THREE: ThreeModule, canvas: HTMLCanvasElement): Flyby {
   const renderer = new THREE.WebGLRenderer({ canvas, alpha: true, antialias: true, powerPreference: "high-performance" });
   renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.5));
   renderer.setClearColor(0x000000, 0);
+  // Filmic response, so the hull keeps its contrast instead of washing out.
+  renderer.toneMapping = THREE.ACESFilmicToneMapping;
+  renderer.toneMappingExposure = 1.05;
   let drawn = false;
+
   const scene = new THREE.Scene();
-  const camera = new THREE.PerspectiveCamera(50, 1, 0.5, 600);
-  scene.add(new THREE.HemisphereLight(0xdfe8ff, 0x2a2418, 1.1));
-  const key = new THREE.DirectionalLight(0xfff2dc, 2.2);
-  key.position.set(-30, 40, 20);
+  const camera = new THREE.PerspectiveCamera(50, 1, 0.5, 800);
+  scene.add(new THREE.HemisphereLight(0xcfd8ff, 0x1a1610, 0.45));
+  const key = new THREE.DirectionalLight(0xfff1dc, 2.6);
+  key.position.set(-30, 45, 25);
   scene.add(key);
-  const rimLight = new THREE.DirectionalLight(0x86c8ff, 1.2);
-  rimLight.position.set(30, -10, -40);
+  const rimLight = new THREE.DirectionalLight(0x86c8ff, 1.4);
+  rimLight.position.set(35, -10, -45);
   scene.add(rimLight);
 
-  const { ship, engineMaterial } = buildShip(THREE);
-  scene.add(ship);
-  ship.visible = false;
+  // The body flies; the ship inside it is the real model once loaded, or
+  // the built one if the model can't be had.
+  const body = new THREE.Group();
+  body.visible = false;
+  scene.add(body);
+  let engines: Array<{ material: THREE.MeshStandardMaterial; base: number }> = [];
+  let builtEngine: THREE.MeshBasicMaterial | null = null;
+  let rearZ = -SHIP_SIZE / 2;
+  let ready = false;
+  let loading = false;
+  const useBuiltShip = () => {
+    const { ship, engineMaterial } = buildShip(THREE);
+    // The built ship's nose is -Z; turn it to match the model (+Z).
+    ship.rotation.y = Math.PI;
+    ship.scale.setScalar(SHIP_SIZE / 9.6);
+    body.add(ship);
+    builtEngine = engineMaterial;
+    rearZ = -3.1 * (SHIP_SIZE / 9.6);
+    ready = true;
+  };
 
   // Engine glow and a short trail of fading glows behind it.
   const glow = glowTexture(THREE);
   const flare = new THREE.Sprite(new THREE.SpriteMaterial({ map: glow, transparent: true, blending: THREE.AdditiveBlending, depthWrite: false }));
-  flare.scale.setScalar(4.5);
   scene.add(flare);
   const trail = Array.from({ length: 10 }, (_, index) => {
     const sprite = new THREE.Sprite(
-      new THREE.SpriteMaterial({ map: glow, transparent: true, blending: THREE.AdditiveBlending, depthWrite: false, opacity: 0.5 * (1 - index / 10) }),
+      new THREE.SpriteMaterial({ map: glow, transparent: true, blending: THREE.AdditiveBlending, depthWrite: false, opacity: 0.45 * (1 - index / 10) }),
     );
-    sprite.scale.setScalar(3 * (1 - index / 12));
+    sprite.scale.setScalar(2.6 * (1 - index / 12));
     scene.add(sprite);
     return sprite;
   });
   const history: THREE.Vector3[] = [];
   const hideAll = () => {
-    ship.visible = false;
+    body.visible = false;
     flare.visible = false;
     for (const sprite of trail) sprite.visible = false;
   };
   hideAll();
 
-  let curve: THREE.CatmullRomCurve3 | null = null;
-  let seconds = 3;
-  let t = 0;
-  let lastRoll = 0;
-  const point = new THREE.Vector3();
+  let pass: Pass | null = null;
+  let elapsed = 0;
+  let seen = false;
+  let bank = 0;
+  const worldUp = new THREE.Vector3(0, 1, 0);
+  const right = new THREE.Vector3();
   const ahead = new THREE.Vector3();
-  const tangent = new THREE.Vector3();
-  const previousTangent = new THREE.Vector3();
   const rear = new THREE.Vector3();
+  const projected = new THREE.Vector3();
 
   return {
     get flying() {
-      return curve !== null;
+      return pass !== null;
+    },
+    preload() {
+      if (loading || ready) return;
+      loading = true;
+      loadShipModel(THREE)
+        .then((loaded) => {
+          body.add(loaded.ship);
+          engines = loaded.engines;
+          rearZ = loaded.rearZ;
+          ready = true;
+        })
+        .catch(useBuiltShip);
     },
     launch() {
-      if (curve) return;
-      const pass = passPoints(THREE, PASSES[Math.floor(Math.random() * PASSES.length)]);
-      curve = new THREE.CatmullRomCurve3(pass.points, false, "centripetal");
-      seconds = pass.seconds;
-      t = 0;
-      lastRoll = 0;
+      if (pass || !ready) return;
+      pass = makePass(THREE, PASSES[Math.floor(Math.random() * PASSES.length)]);
+      elapsed = 0;
+      seen = false;
+      bank = 0;
       history.length = 0;
-      curve.getTangentAt(0, previousTangent);
-      ship.visible = true;
+      body.visible = true;
       flare.visible = true;
     },
     update(dt: number) {
-      if (!curve) return;
-      t += dt / seconds;
-      if (t >= 1) {
-        curve = null;
+      if (!pass) return;
+      elapsed += dt;
+      // Turn and pitch at the pass's rates, then fly on at cruise speed.
+      const yawRate = pass.yawRate(elapsed);
+      pass.heading.applyAxisAngle(worldUp, yawRate * dt);
+      right.crossVectors(pass.heading, worldUp).normalize();
+      pass.heading.applyAxisAngle(right, pass.pitchRate(elapsed) * dt).normalize();
+      pass.position.addScaledVector(pass.heading, pass.speed * dt);
+
+      // Nose along the heading, banked into the turn (right wing down for a
+      // right turn), eased so the roll never snaps.
+      const targetBank = THREE.MathUtils.clamp(Math.atan((-yawRate * pass.speed) / BANK_G), -MAX_BANK, MAX_BANK);
+      bank += (targetBank - bank) * (1 - Math.exp(-3 * dt));
+      body.position.copy(pass.position);
+      ahead.copy(pass.position).add(pass.heading);
+      body.lookAt(ahead);
+      body.rotateZ(bank);
+
+      // Done once it has been on screen and has left it.
+      projected.copy(pass.position).project(camera);
+      const inView = projected.z < 1 && Math.abs(projected.x) < 1.15 && Math.abs(projected.y) < 1.15 && pass.position.z < 0;
+      if (inView) seen = true;
+      if ((seen && !inView) || elapsed > PASS_MAX_SECONDS) {
+        pass = null;
         hideAll();
         return;
       }
-      // A gentle ease so it surges in and out rather than sliding.
-      const u = t < 0.5 ? 2 * t * t * 0.4 + t * 0.6 : 1 - (2 * (1 - t) * (1 - t) * 0.4 + (1 - t) * 0.6);
-      curve.getPointAt(u, point);
-      curve.getPointAt(Math.min(1, u + 0.01), ahead);
-      curve.getTangentAt(u, tangent);
-      ship.position.copy(point);
-      // lookAt aims an object's +Z; the ship is modeled nose along -Z.
-      ship.lookAt(ahead);
-      ship.rotateY(Math.PI);
-      // Bank into the turn: roll follows how fast the heading swings sideways,
-      // plus a small weave of its own.
-      const swing = (tangent.x - previousTangent.x) / Math.max(1e-4, dt);
-      previousTangent.copy(tangent);
-      const targetRoll = THREE.MathUtils.clamp(-swing * 0.35, -1.1, 1.1) + Math.sin(t * Math.PI * 3) * 0.18;
-      lastRoll += (targetRoll - lastRoll) * (1 - Math.exp(-6 * dt));
-      ship.rotateZ(lastRoll);
-      // The engine strip sits at the back (+Z in the ship's frame).
-      rear.set(0, 0, 3.1).applyQuaternion(ship.quaternion).add(point);
-      flare.position.copy(rear);
+
+      // Engines: the grille brightens and flickers, a flare and trail behind.
       const pulse = 0.85 + Math.random() * 0.3;
-      flare.scale.setScalar(4.5 * pulse);
-      engineMaterial.color.setHSL(0.54, 0.9, 0.72 + 0.1 * pulse);
+      for (const engine of engines) engine.material.emissiveIntensity = engine.base * (1.2 + 0.6 * pulse);
+      builtEngine?.color.setHSL(0.54, 0.9, 0.72 + 0.1 * pulse);
+      rear.set(0, 0, rearZ).applyQuaternion(body.quaternion).add(pass.position);
+      flare.position.copy(rear);
+      flare.scale.setScalar(3.2 * pulse);
       history.unshift(rear.clone());
       if (history.length > trail.length * 2) history.length = trail.length * 2;
       trail.forEach((sprite, index) => {
@@ -279,7 +406,7 @@ export function createFlyby(THREE: ThreeModule, canvas: HTMLCanvasElement): Flyb
       });
     },
     render() {
-      if (!curve) {
+      if (!pass) {
         // Leave nothing behind after a pass; then stay idle.
         if (drawn) {
           renderer.clear();
@@ -297,9 +424,10 @@ export function createFlyby(THREE: ThreeModule, canvas: HTMLCanvasElement): Flyb
     },
     dispose() {
       scene.traverse((object) => {
-        const mesh = object as { geometry?: { dispose(): void }; material?: { dispose(): void } };
+        const mesh = object as { geometry?: { dispose(): void }; material?: { dispose(): void } | Array<{ dispose(): void }> };
         mesh.geometry?.dispose?.();
-        mesh.material?.dispose?.();
+        if (Array.isArray(mesh.material)) mesh.material.forEach((material) => material.dispose());
+        else mesh.material?.dispose?.();
       });
       glow.dispose();
       renderer.dispose();
