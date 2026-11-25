@@ -46,6 +46,12 @@
   pointer-events: none;
 }
 
+/* Without titles, the skip button sits low and out of the way. */
+.showcase-peek.is-untitled {
+  align-content: end;
+  padding-bottom: 72px;
+}
+
 .showcase-peek-title {
   display: grid;
   justify-items: center;
