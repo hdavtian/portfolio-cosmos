@@ -139,34 +139,6 @@ const readPeekWanted = () => {
   }
 };
 
-const TONES_STORAGE_KEY = "showcase:scene-tones";
-
-/**
- * Which color tone each scene wears: shuffled once a session and kept, so a
- * scene looks the same in the peek, the slow tour and after a reload.
- */
-const readSessionTones = (): string[] => {
-  try {
-    const stored = JSON.parse(sessionStorage.getItem(TONES_STORAGE_KEY) ?? "null") as unknown;
-    if (
-      Array.isArray(stored) &&
-      stored.length === PEEK_TONES.length &&
-      stored.every((index) => Number.isInteger(index) && index >= 0 && index < PEEK_TONES.length)
-    ) {
-      return (stored as number[]).map((index) => PEEK_TONES[index]);
-    }
-  } catch {
-    // Fall through to a fresh order.
-  }
-  const order = shuffled(PEEK_TONES.map((_, index) => index));
-  try {
-    sessionStorage.setItem(TONES_STORAGE_KEY, JSON.stringify(order));
-  } catch {
-    // Not remembered; the order is just this load's.
-  }
-  return order.map((index) => PEEK_TONES[index]);
-};
-
 const markPeekSeen = () => {
   try {
     sessionStorage.setItem(PEEK_STORAGE_KEY, "seen");
@@ -229,8 +201,6 @@ export function SceneStage({ projects, techStack, highlights, portfolio, profile
     transitioning: false,
     // A fresh order of transition effects each session.
     effects: shuffled(PEEK_TRANSITIONS),
-    // A fresh order of color tones, one per peek scene.
-    tones: readSessionTones(),
     effectIndex: 0,
     // Random run-ahead per scene (seconds of scene time), and how much is done.
     offsets: new Map<string, number>(),
@@ -470,6 +440,9 @@ export function SceneStage({ projects, techStack, highlights, portfolio, profile
       let slidePresence = 0;
       let slideWritten = "";
       let toneWritten = "";
+      // The scene the current tone was picked for, and that tone.
+      let toneSceneId: string | null = null;
+      let toneForScene = "";
       const failed = failedRef.current;
       const nextPeekScene = (id: string) => nextPeekSceneAfter(id, failed);
 
@@ -634,11 +607,15 @@ export function SceneStage({ projects, techStack, highlights, portfolio, profile
             slideEl.style.transform = transform;
             slideWritten = transform;
           }
-          // Each scene in its own color tone, the same in the peek and the slow
-          // tour for the whole session. It changes when the scene does: under a
-          // peek transition, or mid-glitch in the slow tour.
-          const activeIndex = SCENE_DEFINITIONS.findIndex((definition) => definition.id === activeRef.current);
-          const tone = activeIndex >= 0 ? peek.tones[activeIndex % peek.tones.length] : "";
+          // A random color tone every time a scene comes on, in the peek and
+          // the slow tour alike, never the same one twice in a row. It changes
+          // with the scene: under a peek transition, or mid-glitch in the tour.
+          if (activeRef.current !== toneSceneId) {
+            toneSceneId = activeRef.current;
+            const choices = PEEK_TONES.filter((candidate) => candidate !== toneWritten);
+            toneForScene = toneSceneId ? choices[Math.floor(Math.random() * choices.length)] : "";
+          }
+          const tone = toneForScene;
           if (tone !== toneWritten) {
             slideEl.style.filter = tone;
             toneWritten = tone;
