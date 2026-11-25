@@ -16,6 +16,7 @@ import "./styles/themes/theme-eighties.css";
 import "./styles/themes/theme-film-noir.css";
 import "./styles/fast-experience.css";
 import "./styles/showcase.css";
+import "./styles/showcase-peek.css";
 
 initAnalytics();
 applyInitialTheme();

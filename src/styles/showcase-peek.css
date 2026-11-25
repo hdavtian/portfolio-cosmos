@@ -1,0 +1,258 @@
+/* ---------- HD-12: quick peek over the background scenes ---------- */
+
+/* The quick cut between peek scenes: a brief blur-and-brighten pop. */
+.showcase-scenes__cut {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  pointer-events: none;
+}
+
+/* The end of the peek: a warm sun swells from the center and fades. Capped
+   well short of white so it reads as a boom without blinding. */
+.showcase-peek-boom {
+  position: absolute;
+  inset: -20%;
+  pointer-events: none;
+  background: radial-gradient(
+    circle at 50% 50%,
+    rgb(255 246 222 / 0.95) 0%,
+    rgb(255 205 140 / 0.7) 12%,
+    rgb(255 150 80 / 0.28) 32%,
+    transparent 62%
+  );
+  mix-blend-mode: screen;
+  opacity: 0;
+  transform: scale(0.15);
+  animation: showcase-peek-boom ease-out forwards;
+}
+
+@keyframes showcase-peek-boom {
+  0% { opacity: 0; transform: scale(0.15); }
+  22% { opacity: 0.62; transform: scale(1); }
+  40% { opacity: 0.5; transform: scale(1.25); }
+  100% { opacity: 0; transform: scale(1.6); }
+}
+
+/* The title of the scene playing in the peek, centered over everything but the nav. */
+.showcase-peek {
+  position: fixed;
+  inset: 0;
+  z-index: 3;
+  display: grid;
+  place-items: center;
+  align-content: center;
+  gap: 18px;
+  pointer-events: none;
+}
+
+.showcase-peek-title {
+  display: grid;
+  justify-items: center;
+  gap: 10px;
+  color: var(--showcase-ink);
+  text-shadow: 0 2px 24px rgb(0 0 0 / 0.65);
+}
+
+.showcase-peek-title__count {
+  font-family: var(--showcase-mono);
+  font-size: 12px;
+  letter-spacing: 0.3em;
+  color: var(--showcase-ink-quiet);
+  animation: showcase-peek-fade 500ms ease-out both;
+}
+
+.showcase-peek-title__word {
+  display: flex;
+  font-family: var(--showcase-display);
+  font-weight: 600;
+  font-size: clamp(48px, 8vw, 132px);
+  line-height: 1;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.showcase-peek-title__char {
+  display: inline-block;
+}
+
+.showcase-peek__skip {
+  pointer-events: auto;
+  padding: 6px 14px;
+  border: 1px solid rgb(244 241 236 / 0.28);
+  border-radius: 999px;
+  background: rgb(4 6 10 / 0.45);
+  color: var(--showcase-ink-quiet);
+  font-family: var(--showcase-mono);
+  font-size: 11px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  cursor: pointer;
+  animation: showcase-peek-fade 600ms ease-out 400ms both;
+}
+
+.showcase-peek__skip:hover,
+.showcase-peek__skip:focus-visible {
+  color: var(--showcase-ink);
+  border-color: rgb(244 241 236 / 0.6);
+}
+
+@keyframes showcase-peek-fade {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+/* 1. Skills lattice: letters jump across a grid and snap into place, and a
+   lattice line is drawn under them. */
+.showcase-peek-title--snap .showcase-peek-title__char {
+  animation: showcase-peek-snap 700ms steps(4, end) calc(var(--i) * 45ms) both;
+}
+
+.showcase-peek-title--snap .showcase-peek-title__word {
+  padding-bottom: 10px;
+  background: linear-gradient(90deg, transparent, #baffd3 20%, #baffd3 80%, transparent) bottom / 100% 2px no-repeat;
+  animation: showcase-peek-rule 900ms ease-out 300ms both;
+}
+
+@keyframes showcase-peek-snap {
+  0% { opacity: 0; transform: translate(calc(var(--jx) * 120px), calc(var(--jy) * 120px)); color: #baffd3; }
+  60% { opacity: 1; }
+  100% { opacity: 1; transform: none; }
+}
+
+@keyframes showcase-peek-rule {
+  from { background-size: 0% 2px; }
+  to { background-size: 100% 2px; }
+}
+
+/* 2. GOT inspired Skillz: letters heat from ember to a gold glow, as if forged. */
+.showcase-peek-title--forge .showcase-peek-title__char {
+  animation: showcase-peek-forge 1300ms ease-out calc(var(--i) * 70ms) both;
+}
+
+@keyframes showcase-peek-forge {
+  0% { opacity: 0; color: #3a0d05; filter: blur(6px); text-shadow: none; transform: translateY(10px); }
+  30% { opacity: 1; color: #c2410c; filter: blur(1px); text-shadow: 0 0 18px rgb(255 90 20 / 0.9); transform: none; }
+  60% { color: #ffd27a; text-shadow: 0 0 28px rgb(255 170 60 / 0.95), 0 0 4px #fff3d0; }
+  100% { opacity: 1; color: #f6e7c8; filter: none; text-shadow: 0 0 14px rgb(255 150 60 / 0.45), 0 2px 24px rgb(0 0 0 / 0.65); }
+}
+
+/* 3. Career gallery: a split-flap board. Each tile flips while its letter
+   shuffles through the alphabet (the shuffle is in PeekTitle). */
+.showcase-peek-title--flap .showcase-peek-title__word {
+  perspective: 600px;
+}
+
+.showcase-peek-title--flap .showcase-peek-title__char:not(.is-space) {
+  margin: 0 2px;
+  padding: 2px 6px;
+  border-radius: 4px;
+  background: linear-gradient(rgb(20 22 28 / 0.85) 49%, rgb(0 0 0 / 0.9) 50%, rgb(28 30 36 / 0.85) 51%);
+  animation: showcase-peek-flap 180ms linear calc(var(--i) * 70ms) 3 both;
+}
+
+@keyframes showcase-peek-flap {
+  0% { transform: rotateX(80deg); opacity: 0.4; }
+  100% { transform: rotateX(0deg); opacity: 1; }
+}
+
+/* 4. Orbital portfolio: each letter swings in on its own orbit and settles. */
+.showcase-peek-title--orbit .showcase-peek-title__char {
+  animation: showcase-peek-orbit 1200ms cubic-bezier(0.2, 0.7, 0.2, 1) calc(var(--i) * 60ms) both;
+}
+
+@keyframes showcase-peek-orbit {
+  0% {
+    opacity: 0;
+    transform: rotate(calc(var(--ja) * 200deg + 120deg)) translateX(calc(30vw + var(--jx) * 8vw))
+      rotate(calc(var(--ja) * -200deg - 120deg)) scale(0.4);
+  }
+  20% { opacity: 1; }
+  100% { opacity: 1; transform: rotate(0deg) translateX(0) rotate(0deg) scale(1); }
+}
+
+/* 5. About ride: letters streak in from far off with motion blur. */
+.showcase-peek-title--streak .showcase-peek-title__char {
+  animation: showcase-peek-streak 650ms cubic-bezier(0.15, 0.8, 0.25, 1) calc(var(--i) * 40ms) both;
+}
+
+@keyframes showcase-peek-streak {
+  0% { opacity: 0; transform: translateX(70vw) skewX(-35deg) scaleX(2.6); filter: blur(10px); }
+  70% { opacity: 1; transform: translateX(-8px) skewX(6deg) scaleX(0.95); filter: blur(1px); }
+  100% { opacity: 1; transform: none; filter: none; }
+}
+
+/* 6. Universe tour: scattered points of starlight gather into the letters. */
+.showcase-peek-title--stardust .showcase-peek-title__char {
+  animation: showcase-peek-stardust 1500ms cubic-bezier(0.3, 0.6, 0.2, 1) calc(var(--i) * 50ms) both;
+}
+
+@keyframes showcase-peek-stardust {
+  0% {
+    opacity: 0;
+    transform: translate(calc(var(--jx) * 35vw), calc(var(--jy) * 30vh)) scale(0.15);
+    filter: blur(3px);
+    color: #bfe3ff;
+    text-shadow: 0 0 6px #fff, 0 0 18px #7fc4ff;
+  }
+  40% { opacity: 1; }
+  80% { filter: blur(0.5px); color: #e8f4ff; text-shadow: 0 0 12px rgb(150 210 255 / 0.8); }
+  100% { opacity: 1; transform: none; filter: none; color: var(--showcase-ink); text-shadow: 0 2px 24px rgb(0 0 0 / 0.65); }
+}
+
+/* 7. Job moon: a terminal decode that flickers as the characters resolve (the
+   scramble is in PeekTitle). The flicker stays under three flashes a second. */
+.showcase-peek-title--decode .showcase-peek-title__word {
+  font-family: var(--showcase-mono);
+  font-weight: 500;
+  font-size: clamp(36px, 6vw, 96px);
+  color: #baffd3;
+  text-shadow: 0 0 14px rgb(122 226 156 / 0.6);
+  animation: showcase-peek-flicker 1400ms steps(1) both;
+}
+
+.showcase-peek-title--decode .showcase-peek-title__word::after {
+  content: "_";
+  animation: showcase-peek-cursor 1s steps(1) infinite;
+}
+
+@keyframes showcase-peek-flicker {
+  0% { opacity: 0.2; }
+  20% { opacity: 1; }
+  45% { opacity: 0.45; }
+  60% { opacity: 1; }
+  85% { opacity: 0.7; }
+  100% { opacity: 1; }
+}
+
+@keyframes showcase-peek-cursor {
+  50% { opacity: 0; }
+}
+
+/* How long the scene on screen has left, left to right across the top.
+   The render loop sets the fill's scale every frame. */
+.showcase-duration {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 6;
+  height: 3px;
+  background: rgb(244 241 236 / 0.08);
+  pointer-events: none;
+}
+
+.showcase-duration__fill {
+  height: 100%;
+  background: linear-gradient(90deg, rgb(122 226 156 / 0.4), #baffd3);
+  box-shadow: 0 0 10px rgb(122 226 156 / 0.6);
+  transform-origin: left center;
+  transform: scaleX(0);
+}
+
+/* During the peek the bar runs warmer, building toward the flash. */
+.showcase-duration__fill.is-peek {
+  background: linear-gradient(90deg, rgb(255 170 90 / 0.4), #ffd9a0);
+  box-shadow: 0 0 10px rgb(255 170 90 / 0.6);
+}

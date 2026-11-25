@@ -3,6 +3,7 @@ import { Link } from "react-router-dom";
 import type { TechStackTreeNode } from "@hd/content-schema/tech-stack-tree";
 import type { ShowcaseProject } from "../lib/useShowcaseProjects";
 import { SCENE_DEFINITIONS } from "../scenes/registry";
+import { PeekTitle } from "./PeekTitle";
 import { trackEvent } from "../../../lib/analytics";
 import { EMPTY_PORTFOLIO, type SceneData, type SceneJob, type ScenePortfolio, type ShowcaseScene } from "../scenes/types";
 
@@ -78,6 +79,44 @@ const PAGE_CONTENT_SELECTOR = [
 
 const PLATE_STORAGE_KEY = "showcase:previews-open";
 
+/*
+ * HD-12 quick peek: once per browser session, before the slow tour, every scene
+ * plays for a few seconds under its own title while one slow zoom runs across
+ * them all; a soft flash ends it and the slow tour starts from the first scene.
+ */
+const PEEK_STORAGE_KEY = "showcase:quick-peek";
+/** How long each scene plays in the peek (longer only while the next one loads). */
+const PEEK_SLOT_MS = 4_000;
+/** Lens narrowing over the peek: the field of view ends at this fraction. */
+const PEEK_ZOOM_END = 0.7;
+/** The zoom reaches PEEK_ZOOM_END after this long, at a constant rate. */
+const PEEK_ZOOM_SPAN_MS = PEEK_SLOT_MS * 7;
+/** The flash; the first scene is switched in under its peak. */
+const BOOM_MS = 1_700;
+const BOOM_SWITCH_MS = 520;
+/** The quick cut between peek scenes. */
+const CUT_MS = 320;
+
+type PeekPhase = "preview" | "boom" | "done";
+
+/** Runs once a session, and only for visitors who leave the auto-tour on. */
+const readPeekWanted = () => {
+  if (!readTourPreference()) return false;
+  try {
+    return sessionStorage.getItem(PEEK_STORAGE_KEY) !== "seen";
+  } catch {
+    return false;
+  }
+};
+
+const markPeekSeen = () => {
+  try {
+    sessionStorage.setItem(PEEK_STORAGE_KEY, "seen");
+  } catch {
+    // Without session storage it simply may play again.
+  }
+};
+
 /** The previews list starts closed; a visitor who opens it finds it open next time. */
 const readPlatePreference = () => {
   try {
@@ -114,6 +153,12 @@ export function SceneStage({ projects, techStack, highlights, portfolio, profile
   const [transition, setTransition] = useState<"leaving" | "entering" | null>(null);
   const [autoTour, setAutoTour] = useState(readTourPreference);
   const [plateOpen, setPlateOpen] = useState(readPlatePreference);
+  const [peekPhase, setPeekPhase] = useState<PeekPhase>(() => (readPeekWanted() ? "preview" : "done"));
+  // Loop-side peek state: time in the current slot, total peek time, flash time.
+  const peekRef = useRef({ phase: peekPhase, slot: 0, total: 0, boom: 0, switched: false });
+  const barRef = useRef<HTMLDivElement>(null);
+  const cutRef = useRef<HTMLDivElement>(null);
+  const failedRef = useRef(new Set<string>());
 
   // Live values for the render loop, which is set up once.
   const scenesRef = useRef(new Map<string, ShowcaseScene>());
@@ -167,6 +212,35 @@ export function SceneStage({ projects, techStack, highlights, portfolio, profile
       }, ENTER_MS);
     }, LEAVE_MS);
   }, []);
+
+  // Peek: a hard cut with a short pop, not the slow glitch.
+  const cutTo = useCallback((id: string) => {
+    activeRef.current = id;
+    activeSinceRef.current = performance.now();
+    setActiveId(id);
+    cutRef.current?.animate(
+      [
+        { opacity: 0.55, backdropFilter: "blur(6px) brightness(1.6)" },
+        { opacity: 0, backdropFilter: "blur(0px) brightness(1)" },
+      ],
+      { duration: CUT_MS, easing: "ease-out" },
+    );
+  }, []);
+
+  const setPeek = useCallback((phase: PeekPhase) => {
+    peekRef.current.phase = phase;
+    setPeekPhase(phase);
+  }, []);
+
+  const startBoom = useCallback(
+    (outcome: "completed" | "skipped") => {
+      if (peekRef.current.phase !== "preview") return;
+      Object.assign(peekRef.current, { boom: 0, switched: false });
+      setPeek("boom");
+      trackEvent("showcase_quick_peek", { outcome, scene_id: activeRef.current });
+    },
+    [setPeek],
+  );
 
   useEffect(() => {
     for (const scene of scenesRef.current.values()) scene.setHighlights?.(highlights);
@@ -276,6 +350,8 @@ export function SceneStage({ projects, techStack, highlights, portfolio, profile
       window.addEventListener("pointercancel", onPointerUp);
       let viewSceneId: string | null = null;
       const worldUp = new THREE.Vector3(0, 1, 0);
+      // The peek's slow lens zoom, eased back to 1 when the peek ends.
+      let peekZoom = 1;
 
       const reported = new Map<string, string>();
       const report = (id: string, status: SceneStatus) => {
@@ -298,7 +374,12 @@ export function SceneStage({ projects, techStack, highlights, portfolio, profile
           frame = 0;
           return;
         }
-        const dt = Math.min(0.1, (now - last) / 1000);
+        // Real time since the last frame. Scenes get it capped (a slow frame
+        // must not jump them); the peek clock runs on it uncapped, so a heavy
+        // scene at a low frame rate still gets a 4-second slot, not 20. A pause
+        // or hidden tab resets `last`, so time away is not counted.
+        const frameMs = now - last;
+        const dt = Math.min(0.1, frameMs / 1000);
         last = now;
         smoothed.x += (pointer.x - smoothed.x) * (1 - Math.exp(-4 * dt));
         smoothed.y += (pointer.y - smoothed.y) * (1 - Math.exp(-4 * dt));
@@ -331,13 +412,71 @@ export function SceneStage({ projects, techStack, highlights, portfolio, profile
               activeSinceRef.current = now;
               setActiveId(definition.id);
               onShowingRef.current(true);
+              // The peek counts as seen once it has started.
+              if (peekRef.current.phase === "preview") markPeekSeen();
             }
             break;
           }
         }
 
+        const peek = peekRef.current;
+        // Turning the tour off ends the peek where it is.
+        if (peek.phase === "preview" && !autoTourRef.current) setPeek("done");
+        // Peek: each scene gets its slot, then a cut to the next one. A scene
+        // still loading is waited for (the current one keeps playing); one that
+        // failed is skipped. Mouse, wheel and scroll don't hold it up.
+        if (peek.phase === "preview" && activeRef.current && !transitionRef.current) {
+          peek.slot += frameMs;
+          peek.total += frameMs;
+          if (peek.slot >= PEEK_SLOT_MS) {
+            const index = SCENE_DEFINITIONS.findIndex((definition) => definition.id === activeRef.current);
+            const next = SCENE_DEFINITIONS.slice(index + 1).find((definition) => !failedRef.current.has(definition.id));
+            if (!next) {
+              startBoom("completed");
+            } else if ((scenesRef.current.get(next.id)?.progress() ?? 0) >= 1) {
+              peek.slot = 0;
+              cutTo(next.id);
+            }
+          }
+        }
+        // The flash: the first scene goes in under its peak, then the slow tour.
+        if (peek.phase === "boom") {
+          peek.boom += frameMs;
+          if (!peek.switched && peek.boom >= BOOM_SWITCH_MS) {
+            peek.switched = true;
+            peekZoom = 1;
+            const first = SCENE_DEFINITIONS.find((definition) => (scenesRef.current.get(definition.id)?.progress() ?? 0) >= 1);
+            if (first && first.id !== activeRef.current) cutTo(first.id);
+            activeSinceRef.current = now;
+          }
+          if (peek.boom >= BOOM_MS) {
+            activeSinceRef.current = now;
+            setPeek("done");
+          }
+        }
+        const zoomingIn = peek.phase === "preview" || (peek.phase === "boom" && !peek.switched);
+        if (zoomingIn) {
+          peekZoom = Math.max(PEEK_ZOOM_END, 1 - (1 - PEEK_ZOOM_END) * (peek.total / PEEK_ZOOM_SPAN_MS));
+        } else if (peekZoom !== 1) {
+          peekZoom += (1 - peekZoom) * (1 - Math.exp(-2.5 * dt));
+          if (Math.abs(1 - peekZoom) < 0.0005) peekZoom = 1;
+        }
+
+        // Duration bar along the top: the peek slot, then the tour interval.
+        const bar = barRef.current;
+        if (bar) {
+          const share =
+            peek.phase === "preview"
+              ? peek.slot / PEEK_SLOT_MS
+              : peek.phase === "boom"
+                ? 0
+                : (now - activeSinceRef.current) / TOUR_INTERVAL_MS;
+          bar.style.transform = `scaleX(${Math.min(1, Math.max(0, share)).toFixed(4)})`;
+        }
+
         // Auto-tour to the next ready scene while the visitor is idle.
         if (
+          peek.phase === "done" &&
           autoTourRef.current &&
           activeRef.current &&
           !transitionRef.current &&
@@ -373,12 +512,13 @@ export function SceneStage({ projects, techStack, highlights, portfolio, profile
 
           // Applied just for this render, so scenes keep their own camera state.
           const { camera } = active;
+          const lens = view.zoom * peekZoom;
           const adjusted =
-            Math.abs(view.zoom - 1) > 0.001 || Math.abs(view.yaw) > 0.0005 || Math.abs(view.pitch) > 0.0005;
+            Math.abs(lens - 1) > 0.001 || Math.abs(view.yaw) > 0.0005 || Math.abs(view.pitch) > 0.0005;
           const fov = camera.fov;
           const quaternion = adjusted ? camera.quaternion.clone() : null;
           if (adjusted) {
-            camera.fov = THREE.MathUtils.clamp(fov * view.zoom, 8, 120);
+            camera.fov = THREE.MathUtils.clamp(fov * lens, 8, 120);
             camera.updateProjectionMatrix();
             camera.rotateOnWorldAxis(worldUp, view.yaw);
             camera.rotateX(view.pitch);
@@ -448,6 +588,7 @@ export function SceneStage({ projects, techStack, highlights, portfolio, profile
           scene.setFocusProject?.(focusRef.current);
           scenesRef.current.set(definition.id, scene);
         } catch {
+          failedRef.current.add(definition.id);
           setStatuses((current) => ({ ...current, [definition.id]: { phase: "failed", progress: 0 } }));
         }
       }
@@ -457,9 +598,10 @@ export function SceneStage({ projects, techStack, highlights, portfolio, profile
       disposed = true;
       cleanup();
     };
-  }, [hasData, switchTo]);
+  }, [hasData, switchTo, cutTo, setPeek, startBoom]);
 
-  const activeDefinition = SCENE_DEFINITIONS.find((definition) => definition.id === activeId) ?? null;
+  const activeIndex = SCENE_DEFINITIONS.findIndex((definition) => definition.id === activeId);
+  const activeDefinition = SCENE_DEFINITIONS[activeIndex] ?? null;
   const activeDestination = activeDefinition?.destination({
     profile: profile ?? { name: "", title: "" },
     projects,
@@ -485,7 +627,30 @@ export function SceneStage({ projects, techStack, highlights, portfolio, profile
         <div className="showcase-scenes__mood" />
         <div className="showcase-scenes__mood showcase-scenes__mood--lift" />
         <div className="showcase-scenes__shade" />
+        <div ref={cutRef} className="showcase-scenes__cut" />
+        {peekPhase === "boom" ? <div className="showcase-peek-boom" style={{ animationDuration: `${BOOM_MS}ms` }} /> : null}
       </div>
+
+      {peekPhase === "preview" && activeDefinition && !paused ? (
+        <div className="showcase-peek">
+          <PeekTitle
+            key={activeDefinition.id}
+            sceneId={activeDefinition.id}
+            label={activeDefinition.label}
+            position={activeIndex + 1}
+            total={SCENE_DEFINITIONS.length}
+          />
+          <button type="button" className="showcase-peek__skip" onClick={() => startBoom("skipped")}>
+            Skip preview
+          </button>
+        </div>
+      ) : null}
+
+      {activeId && autoTour && !paused && peekPhase !== "boom" ? (
+        <div className="showcase-duration" aria-hidden="true">
+          <div ref={barRef} className={`showcase-duration__fill${peekPhase === "preview" ? " is-peek" : ""}`} />
+        </div>
+      ) : null}
 
       <aside className="showcase-scene-panel" aria-label="Universe scenes" hidden={!showPanel}>
       {/* HD-10: the list is tucked behind the gear below; most visitors never need it. */}
@@ -510,6 +675,8 @@ export function SceneStage({ projects, techStack, highlights, portfolio, profile
                       previous_scene_id: activeId,
                     });
                     lastInteractionRef.current = performance.now();
+                    // Picking a scene by hand ends the peek.
+                    if (peekRef.current.phase === "preview") setPeek("done");
                     switchTo(definition.id);
                   }}
                   disabled={!ready || isActive}
