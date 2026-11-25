@@ -96,6 +96,13 @@ const BOOM_MS = 1_700;
 const BOOM_SWITCH_MS = 520;
 /** The quick cut between peek scenes. */
 const CUT_MS = 320;
+/** Scenes run this many times faster during the peek (whole steps, so no scene sees a big dt). */
+const PEEK_SPEED = 3;
+/**
+ * The per-scene titles (PeekTitle). Off since HD-12 review: they pulled the eye
+ * away from the scenes, and the names mean little to visitors. True brings them back.
+ */
+const SHOW_PEEK_TITLES = false;
 
 type PeekPhase = "preview" | "boom" | "done";
 
@@ -394,7 +401,9 @@ export function SceneStage({ projects, techStack, highlights, portfolio, profile
           if (!scene) continue;
           const progress = scene.progress();
           if (definition.id === activeRef.current) {
-            scene.update(dt, smoothed, true);
+            // The peek plays each scene fast: several ordinary steps per frame.
+            const steps = peekRef.current.phase === "preview" ? PEEK_SPEED : 1;
+            for (let step = 0; step < steps; step += 1) scene.update(dt, smoothed, true);
           } else if (progress < 1 && preloadTick) {
             scene.update(preloadDt, smoothed, false);
           }
@@ -632,14 +641,16 @@ export function SceneStage({ projects, techStack, highlights, portfolio, profile
       </div>
 
       {peekPhase === "preview" && activeDefinition && !paused ? (
-        <div className="showcase-peek">
-          <PeekTitle
-            key={activeDefinition.id}
-            sceneId={activeDefinition.id}
-            label={activeDefinition.label}
-            position={activeIndex + 1}
-            total={SCENE_DEFINITIONS.length}
-          />
+        <div className={`showcase-peek${SHOW_PEEK_TITLES ? "" : " is-untitled"}`}>
+          {SHOW_PEEK_TITLES ? (
+            <PeekTitle
+              key={activeDefinition.id}
+              sceneId={activeDefinition.id}
+              label={activeDefinition.label}
+              position={activeIndex + 1}
+              total={SCENE_DEFINITIONS.length}
+            />
+          ) : null}
           <button type="button" className="showcase-peek__skip" onClick={() => startBoom("skipped")}>
             Skip preview
           </button>
