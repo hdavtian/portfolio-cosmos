@@ -114,6 +114,7 @@ const PEEK_SPEED = 2.3;
  */
 const FLYBY_FIRST_S: [number, number] = [6, 12];
 const FLYBY_EVERY_S: [number, number] = [20, 40];
+const FLYBY_PRELOAD_DELAY_MS = 3_000;
 /**
  * The per-scene titles (PeekTitle). Off since HD-12 review: they pulled the eye
  * away from the scenes, and the names mean little to visitors. True brings them back.
@@ -719,15 +720,23 @@ export function SceneStage({ projects, techStack, highlights, portfolio, profile
 
           // The freighter, now and then, over whatever is showing.
           const randomSeconds = ([min, max]: [number, number]) => (min + Math.random() * (max - min)) * 1000;
-          if (!nextFlybyAt) nextFlybyAt = now + randomSeconds(FLYBY_FIRST_S);
+          if (!nextFlybyAt) {
+            nextFlybyAt = now + randomSeconds(FLYBY_FIRST_S);
+            // The ship model (4.6 MB) loads a little after the first scene
+            // shows, so it never competes with the scenes' own loading.
+            window.setTimeout(() => flyby?.preload(), FLYBY_PRELOAD_DELAY_MS);
+          }
           if (flyby && !flyby.flying && now >= nextFlybyAt) {
             if (peekRef.current.phase === "boom") nextFlybyAt = now + 2_000;
             else {
               flyby.launch();
-              nextFlybyAt = now + randomSeconds(FLYBY_EVERY_S);
+              // Not ready yet (the model is still loading): try again shortly.
+              nextFlybyAt = now + (flyby.flying ? randomSeconds(FLYBY_EVERY_S) : 1_000);
             }
           }
-          flyby?.update(dt);
+          // Close to real time even on a slow machine (a pass should not crawl
+          // in slow motion), without letting one frame jump it far.
+          flyby?.update(Math.min(0.25, frameMs / 1000));
           flyby?.render();
         }
         frame = requestAnimationFrame(render);
