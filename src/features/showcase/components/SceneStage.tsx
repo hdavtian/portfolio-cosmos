@@ -4,6 +4,7 @@ import type { TechStackTreeNode } from "@hd/content-schema/tech-stack-tree";
 import type { ShowcaseProject } from "../lib/useShowcaseProjects";
 import { SCENE_DEFINITIONS } from "../scenes/registry";
 import { PeekTitle } from "./PeekTitle";
+import { createFlyby } from "../lib/flyby";
 import { PEEK_TONES, PEEK_TRANSITIONS, runPeekEnding, runPeekTransition, shuffled, type CancelTransition } from "../lib/peekTransitions";
 import { trackEvent } from "../../../lib/analytics";
 import { EMPTY_PORTFOLIO, type SceneData, type SceneJob, type ScenePortfolio, type ShowcaseScene } from "../scenes/types";
@@ -106,6 +107,13 @@ const CUT_MS = 320;
  * one partial step per frame, so no scene sees a bigger step than usual.
  */
 const PEEK_SPEED = 2.3;
+/*
+ * The freighter fly-by (lib/flyby): the first pass comes a little after the
+ * first scene shows, then one every 20-40 seconds, in the peek and the slow
+ * tour alike, never during the peek's ending.
+ */
+const FLYBY_FIRST_S: [number, number] = [6, 12];
+const FLYBY_EVERY_S: [number, number] = [20, 40];
 /**
  * The per-scene titles (PeekTitle). Off since HD-12 review: they pulled the eye
  * away from the scenes, and the names mean little to visitors. True brings them back.
@@ -211,6 +219,7 @@ export function SceneStage({ projects, techStack, highlights, portfolio, profile
   const fxRef = useRef<HTMLCanvasElement>(null);
   const slideRef = useRef<HTMLDivElement>(null);
   const plateTimerRef = useRef<HTMLSpanElement>(null);
+  const shipCanvasRef = useRef<HTMLCanvasElement>(null);
   const cancelTransitionRef = useRef<CancelTransition | null>(null);
   const barRef = useRef<HTMLDivElement>(null);
   const cutRef = useRef<HTMLDivElement>(null);
@@ -370,6 +379,15 @@ export function SceneStage({ projects, techStack, highlights, portfolio, profile
       renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.5));
       renderer.setClearColor(0x03050a, 1);
       host.appendChild(renderer.domElement);
+      const shipCanvas = shipCanvasRef.current;
+      const flyby = shipCanvas ? createFlyby(THREE, shipCanvas) : null;
+      // When the next pass is due (loop time), set once a scene is showing.
+      let nextFlybyAt = 0;
+      // Development only: start a pass now, for checking it without waiting.
+      if (import.meta.env.DEV) {
+        const helper = Object.assign(() => flyby?.launch(), { isFlying: () => flyby?.flying ?? false });
+        (window as unknown as { __showcaseFlyby?: typeof helper }).__showcaseFlyby = helper;
+      }
 
       const size = { width: 1, height: 1 };
       const resize = () => {
@@ -377,6 +395,7 @@ export function SceneStage({ projects, techStack, highlights, portfolio, profile
         size.height = host.clientHeight;
         renderer.setSize(size.width, size.height, false);
         for (const scene of scenesRef.current.values()) scene.resize(size.width, size.height);
+        flyby?.resize(size.width, size.height);
       };
       const observer = new ResizeObserver(resize);
       observer.observe(host);
@@ -697,6 +716,19 @@ export function SceneStage({ projects, techStack, highlights, portfolio, profile
             camera.quaternion.copy(quaternion);
             camera.updateMatrixWorld();
           }
+
+          // The freighter, now and then, over whatever is showing.
+          const randomSeconds = ([min, max]: [number, number]) => (min + Math.random() * (max - min)) * 1000;
+          if (!nextFlybyAt) nextFlybyAt = now + randomSeconds(FLYBY_FIRST_S);
+          if (flyby && !flyby.flying && now >= nextFlybyAt) {
+            if (peekRef.current.phase === "boom") nextFlybyAt = now + 2_000;
+            else {
+              flyby.launch();
+              nextFlybyAt = now + randomSeconds(FLYBY_EVERY_S);
+            }
+          }
+          flyby?.update(dt);
+          flyby?.render();
         }
         frame = requestAnimationFrame(render);
       };
@@ -732,6 +764,8 @@ export function SceneStage({ projects, techStack, highlights, portfolio, profile
         observer.disconnect();
         for (const scene of scenesRef.current.values()) scene.dispose();
         scenesRef.current.clear();
+        flyby?.dispose();
+        if (import.meta.env.DEV) delete (window as unknown as { __showcaseFlyby?: () => void }).__showcaseFlyby;
         renderer.dispose();
         // Hand the GPU memory back now, not whenever the browser gets to it
         // (the cinematic experience may be taking over).
@@ -797,6 +831,8 @@ export function SceneStage({ projects, techStack, highlights, portfolio, profile
         <div className="showcase-scenes__mood" />
         <div className="showcase-scenes__mood showcase-scenes__mood--lift" />
         <div className="showcase-scenes__shade" />
+        {/* The fly-by ship: outside the toned layer, so it keeps its own colors. */}
+        <canvas ref={shipCanvasRef} className="showcase-scenes__ship" />
         <canvas ref={fxRef} className="showcase-scenes__fx" />
         <div ref={cutRef} className="showcase-scenes__cut" />
       </div>
