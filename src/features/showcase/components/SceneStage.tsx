@@ -210,6 +210,7 @@ export function SceneStage({ projects, techStack, highlights, portfolio, profile
   });
   const fxRef = useRef<HTMLCanvasElement>(null);
   const slideRef = useRef<HTMLDivElement>(null);
+  const plateTimerRef = useRef<HTMLSpanElement>(null);
   const cancelTransitionRef = useRef<CancelTransition | null>(null);
   const barRef = useRef<HTMLDivElement>(null);
   const cutRef = useRef<HTMLDivElement>(null);
@@ -625,16 +626,18 @@ export function SceneStage({ projects, techStack, highlights, portfolio, profile
         }
 
         // Duration bar along the top: the peek slot, then the tour interval.
-        const bar = barRef.current;
-        if (bar) {
-          const share =
-            peek.phase === "preview"
-              ? peek.slot / PEEK_SLOT_MS
-              : peek.phase === "boom"
-                ? 0
-                : (now - activeSinceRef.current) / TOUR_INTERVAL_MS;
-          bar.style.transform = `scaleX(${Math.min(1, Math.max(0, share)).toFixed(4)})`;
-        }
+        // The same value drives the small timer under the active scene in the
+        // gear panel, so the two always agree (it used to be a CSS animation
+        // of its own, which started late and ran on through pauses).
+        const share =
+          peek.phase === "preview"
+            ? peek.slot / PEEK_SLOT_MS
+            : peek.phase === "boom"
+              ? 0
+              : (now - activeSinceRef.current) / TOUR_INTERVAL_MS;
+        const fill = `scaleX(${Math.min(1, Math.max(0, share)).toFixed(4)})`;
+        if (barRef.current) barRef.current.style.transform = fill;
+        if (plateTimerRef.current) plateTimerRef.current.style.transform = fill;
 
         // Auto-tour to the next ready scene while the visitor is idle.
         if (
@@ -861,10 +864,11 @@ export function SceneStage({ projects, techStack, highlights, portfolio, profile
                       <span className="showcase-scene-switcher__percent">{String(percent).padStart(2, "0")}%</span>
                     </span>
                   ) : null}
-                  {isActive && autoTour && !transition ? (
-                    // Time left on this scene before the tour moves on.
-                    <span key={`${activeId}-tour`} className="showcase-scene-switcher__timer" aria-hidden="true">
-                      <span style={{ animationDuration: `${TOUR_INTERVAL_MS - ENTER_MS}ms` }} />
+                  {isActive && autoTour && !paused && peekPhase !== "boom" ? (
+                    // Time on this scene: the peek slot, then the tour interval.
+                    // Filled from the render loop, with the bar along the top.
+                    <span className={`showcase-scene-switcher__timer${peekPhase === "preview" ? " is-peek" : ""}`} aria-hidden="true">
+                      <span ref={plateTimerRef} />
                     </span>
                   ) : null}
                   {status?.phase === "failed" ? <span className="showcase-scene-switcher__percent">offline</span> : null}
