@@ -366,13 +366,14 @@ html.is-scene-dragging * {
   );
   box-shadow: 0 0 8px rgba(var(--scene-green), 0.55);
   transform-origin: left center;
+  /* Filled from the render loop (HD-12), in step with the bar along the top. */
   transform: scaleX(0);
-  animation: showcase-tour-timer linear forwards;
 }
 
-@keyframes showcase-tour-timer {
-  from { transform: scaleX(0); }
-  to { transform: scaleX(1); }
+/* During the peek, warm like the top bar. */
+.showcase-scene-switcher__timer.is-peek > span {
+  background: repeating-linear-gradient(90deg, #ffd9a0 0 4px, rgb(255 170 90 / 0.35) 4px 8px);
+  box-shadow: 0 0 8px rgb(255 170 90 / 0.55);
 }
 
 /* Racy, jittery loading bar per scene. */
