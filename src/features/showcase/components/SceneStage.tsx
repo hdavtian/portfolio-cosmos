@@ -4,7 +4,7 @@ import type { TechStackTreeNode } from "@hd/content-schema/tech-stack-tree";
 import type { ShowcaseProject } from "../lib/useShowcaseProjects";
 import { SCENE_DEFINITIONS } from "../scenes/registry";
 import { PeekTitle } from "./PeekTitle";
-import { PEEK_TRANSITIONS, runPeekTransition, shuffled, type CancelTransition } from "../lib/peekTransitions";
+import { PEEK_TONES, PEEK_TRANSITIONS, runPeekEnding, runPeekTransition, shuffled, type CancelTransition } from "../lib/peekTransitions";
 import { trackEvent } from "../../../lib/analytics";
 import { EMPTY_PORTFOLIO, type SceneData, type SceneJob, type ScenePortfolio, type ShowcaseScene } from "../scenes/types";
 
@@ -99,9 +99,6 @@ const PEEK_SLIDE_SCALE = 1.14;
 const PEEK_SLIDE_TRAVEL = 6;
 /** The slide crosses from one side to the other in this long, at a constant rate. */
 const PEEK_SLIDE_SPAN_MS = PEEK_SLOT_MS * 7;
-/** The flash; the first scene is switched in under its peak. */
-const BOOM_MS = 1_700;
-const BOOM_SWITCH_MS = 520;
 /** The quick cut between peek scenes. */
 const CUT_MS = 320;
 /**
@@ -193,17 +190,19 @@ export function SceneStage({ projects, techStack, highlights, portfolio, profile
   const [autoTour, setAutoTour] = useState(readTourPreference);
   const [plateOpen, setPlateOpen] = useState(readPlatePreference);
   const [peekPhase, setPeekPhase] = useState<PeekPhase>(() => (readPeekWanted() ? "preview" : "done"));
-  // Loop-side peek state: time in the current slot, total peek time, flash time.
+  // Loop-side peek state: time in the current slot, total peek time, and
+  // whether the ending has reached black (the first scene is back in).
   const peekRef = useRef({
     phase: peekPhase,
     slot: 0,
     total: 0,
-    boom: 0,
     switched: false,
     // A transition between peek scenes is playing.
     transitioning: false,
     // A fresh order of transition effects each session.
     effects: shuffled(PEEK_TRANSITIONS),
+    // A fresh order of color tones, one per peek scene.
+    tones: shuffled(PEEK_TONES),
     effectIndex: 0,
     // Random run-ahead per scene (seconds of scene time), and how much is done.
     offsets: new Map<string, number>(),
@@ -297,11 +296,36 @@ export function SceneStage({ projects, techStack, highlights, portfolio, profile
       if (peekRef.current.phase !== "preview") return;
       cancelTransitionRef.current?.();
       cancelTransitionRef.current = null;
-      Object.assign(peekRef.current, { boom: 0, switched: false, transitioning: false });
+      Object.assign(peekRef.current, { switched: false, transitioning: false });
       setPeek("boom");
       trackEvent("showcase_quick_peek", { outcome, scene_id: activeRef.current });
+      // The ending: boom, static and fade to black, silence, then the first
+      // scene fades in and the slow tour starts.
+      const host = hostRef.current;
+      const fade = slideRef.current;
+      const fx = fxRef.current;
+      const begin = () => {
+        activeSinceRef.current = performance.now();
+        setPeek("done");
+      };
+      if (!host || !fade || !fx) {
+        begin();
+        return;
+      }
+      cancelTransitionRef.current = runPeekEnding({
+        host,
+        fade,
+        fx,
+        onBlack: () => {
+          // Under the black: the slide lets go, and the first scene goes in.
+          peekRef.current.switched = true;
+          const first = SCENE_DEFINITIONS.find((definition) => (scenesRef.current.get(definition.id)?.progress() ?? 0) >= 1);
+          if (first && first.id !== activeRef.current) cutTo(first.id, false);
+        },
+        onRise: begin,
+      });
     },
-    [setPeek],
+    [setPeek, cutTo],
   );
 
   useEffect(() => {
@@ -417,6 +441,7 @@ export function SceneStage({ projects, techStack, highlights, portfolio, profile
       const slideDirection = Math.random() < 0.5 ? 1 : -1;
       let slidePresence = 0;
       let slideWritten = "";
+      let toneWritten = "";
       const failed = failedRef.current;
       const nextPeekScene = (id: string) => nextPeekSceneAfter(id, failed);
 
@@ -560,24 +585,13 @@ export function SceneStage({ projects, techStack, highlights, portfolio, profile
             }
           }
         }
-        // The flash: the first scene goes in under its peak, then the slow tour.
-        if (peek.phase === "boom") {
-          peek.boom += frameMs;
-          if (!peek.switched && peek.boom >= BOOM_SWITCH_MS) {
-            peek.switched = true;
-            slidePresence = 0;
-            const first = SCENE_DEFINITIONS.find((definition) => (scenesRef.current.get(definition.id)?.progress() ?? 0) >= 1);
-            if (first && first.id !== activeRef.current) cutTo(first.id);
-            activeSinceRef.current = now;
-          }
-          if (peek.boom >= BOOM_MS) {
-            activeSinceRef.current = now;
-            setPeek("done");
-          }
-        }
+        // The ending runs on its own clock (runPeekEnding); the loop only lets
+        // the slide go: at once once the screen is black, gently otherwise.
         const sliding = peek.phase === "preview" || (peek.phase === "boom" && !peek.switched);
         if (sliding) {
           slidePresence = 1;
+        } else if (peek.phase === "boom" || peek.switched) {
+          slidePresence = 0;
         } else if (slidePresence > 0) {
           slidePresence *= Math.exp(-2.5 * dt);
           if (slidePresence < 0.002) slidePresence = 0;
@@ -591,6 +605,14 @@ export function SceneStage({ projects, techStack, highlights, portfolio, profile
           if (transform !== slideWritten) {
             slideEl.style.transform = transform;
             slideWritten = transform;
+          }
+          // Each peek scene in its own color tone (changing at the cut, under
+          // the transition); back to the plain picture once the ending is black.
+          const activeIndex = SCENE_DEFINITIONS.findIndex((definition) => definition.id === activeRef.current);
+          const tone = sliding && activeIndex >= 0 ? peek.tones[activeIndex % peek.tones.length] : "";
+          if (tone !== toneWritten) {
+            slideEl.style.filter = tone;
+            toneWritten = tone;
           }
         }
 
@@ -765,7 +787,6 @@ export function SceneStage({ projects, techStack, highlights, portfolio, profile
         <div className="showcase-scenes__shade" />
         <canvas ref={fxRef} className="showcase-scenes__fx" />
         <div ref={cutRef} className="showcase-scenes__cut" />
-        {peekPhase === "boom" ? <div className="showcase-peek-boom" style={{ animationDuration: `${BOOM_MS}ms` }} /> : null}
       </div>
 
       {peekPhase === "preview" && activeDefinition && !paused ? (

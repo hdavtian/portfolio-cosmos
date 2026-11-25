@@ -10,6 +10,22 @@
  * are dips toward black, and the bright parts are thin lines or small dots.
  */
 
+/*
+ * A color tone per scene in the peek, as CSS filters on the scene layer. Each
+ * also lifts brightness: the scenes are dimmed for the slow tour, which made
+ * several hard to see in a 4-second glimpse. Duotones are sepia turned by
+ * hue-rotate and pushed with saturate.
+ */
+export const PEEK_TONES: string[] = [
+  "sepia(0.85) brightness(1.35) contrast(1.05)", // sepia
+  "sepia(1) hue-rotate(160deg) saturate(2.2) brightness(1.3)", // teal duotone
+  "sepia(0.6) saturate(2.2) hue-rotate(-12deg) brightness(1.35)", // amber gold
+  "sepia(1) hue-rotate(260deg) saturate(2.4) brightness(1.3)", // magenta duotone
+  "grayscale(1) contrast(1.35) brightness(1.45)", // bright high-contrast mono
+  "saturate(1.9) contrast(1.15) brightness(1.35)", // vivid
+  "sepia(1) hue-rotate(60deg) saturate(3) brightness(1.4) contrast(1.1)", // night vision
+];
+
 export type PeekTransitionKind = "flicker" | "particles" | "scanlines" | "crt" | "tear" | "static" | "blinds";
 
 export const PEEK_TRANSITIONS: PeekTransitionKind[] = ["flicker", "particles", "scanlines", "crt", "tear", "static", "blinds"];
@@ -329,6 +345,171 @@ const FACTORIES: Record<PeekTransitionKind, () => Effect> = {
   static: staticBurst,
   blinds,
 };
+
+/*
+ * The end of the peek, in four beats:
+ *   1. Boom: a white-hot core bursts at the center, two shockwave rings race
+ *      out to the edges, the picture jolts and torn color bands flash across.
+ *      One flash over a small area, so it is not blinding.
+ *   2. Static: heavy TV snow takes over and dies away while the picture
+ *      fades to black (`onBlack` fires once it is black).
+ *   3. Silence: nothing for three seconds.
+ *   4. The first scene fades in (`onRise` fires as it starts).
+ */
+export const ENDING_BLACK_MS = 2_200;
+export const ENDING_SILENCE_MS = 3_000;
+export const ENDING_RISE_MS = 2_000;
+
+interface EndingTargets {
+  /** The scene layer that jolts. */
+  host: HTMLElement;
+  /** The layer that fades out and back in (wraps the host). */
+  fade: HTMLElement;
+  fx: HTMLCanvasElement;
+  onBlack: () => void;
+  onRise: () => void;
+}
+
+export function runPeekEnding({ host, fade, fx, onBlack, onRise }: EndingTargets): CancelTransition {
+  const context = fx.getContext("2d");
+  fx.width = Math.max(1, Math.round(fx.clientWidth));
+  fx.height = Math.max(1, Math.round(fx.clientHeight));
+  const total = ENDING_BLACK_MS + ENDING_SILENCE_MS + ENDING_RISE_MS;
+  const black = ENDING_BLACK_MS / total;
+  const rise = (ENDING_BLACK_MS + ENDING_SILENCE_MS) / total;
+
+  // The jolt: hard, stepped, dying away over about 0.7 s.
+  const shake = Array.from({ length: 12 }, (_, index) => {
+    const strength = (1 - index / 12) ** 2;
+    return {
+      offset: index / 12,
+      transform: `translate(${Math.round(rand(-18, 18) * strength)}px, ${Math.round(rand(-10, 10) * strength)}px)`,
+      filter: index === 0 ? "brightness(1.9) saturate(1.4)" : `brightness(${(1 + 0.6 * strength).toFixed(2)})`,
+    };
+  });
+  shake.push({ offset: 1, transform: "none", filter: "none" });
+  const animations = [
+    host.animate(shake, { duration: 700, easing: "steps(1, end)" }),
+    // Fade out under the static, hold black through the silence, fade in.
+    fade.animate(
+      [
+        { opacity: 1, offset: 0 },
+        { opacity: 1, offset: 0.25 * black, easing: "ease-in" },
+        { opacity: 0, offset: black, easing: "linear" },
+        { opacity: 0, offset: rise, easing: "ease-out" },
+        { opacity: 1, offset: 1 },
+      ],
+      // No overall easing: it would bend the whole timeline and put black
+      // after the scene swap. Each stretch has its own easing above.
+      { duration: total },
+    ),
+  ];
+
+  // Snow, drawn small and scaled up hard-edged.
+  const cells = { width: 192, height: 108 };
+  const scratch = document.createElement("canvas");
+  scratch.width = cells.width;
+  scratch.height = cells.height;
+  const scratchContext = scratch.getContext("2d");
+  const noise = scratchContext?.createImageData(cells.width, cells.height) ?? null;
+  const rings = [
+    { delay: 0, speed: 1, width: 10 },
+    { delay: 110, speed: 0.75, width: 4 },
+  ];
+  let rollY = Math.random();
+
+  const start = performance.now();
+  let frame = 0;
+  let blackFired = false;
+  let riseFired = false;
+  let finished = false;
+  const clear = () => context?.clearRect(0, 0, fx.width, fx.height);
+  const finish = () => {
+    if (finished) return;
+    finished = true;
+    cancelAnimationFrame(frame);
+    clear();
+  };
+
+  const step = () => {
+    const elapsed = performance.now() - start;
+    const width = fx.width;
+    const height = fx.height;
+    const cx = width / 2;
+    const cy = height / 2;
+    const diagonal = Math.hypot(width, height) / 2;
+    clear();
+    if (context && elapsed < ENDING_BLACK_MS) {
+      // Static: swells in fast after the hit, then dies away to nothing.
+      const snow = elapsed < 150 ? elapsed / 150 : Math.max(0, 1 - (elapsed - 150) / (ENDING_BLACK_MS - 150)) ** 1.4;
+      if (snow > 0.01 && scratchContext && noise) {
+        const data = noise.data;
+        for (let index = 0; index < data.length; index += 4) {
+          const value = Math.random() * 255;
+          data[index] = value;
+          data[index + 1] = value;
+          data[index + 2] = value;
+          data[index + 3] = 255;
+        }
+        scratchContext.putImageData(noise, 0, 0);
+        context.imageSmoothingEnabled = false;
+        context.globalAlpha = 0.8 * snow;
+        context.drawImage(scratch, 0, 0, width, height);
+        // A darker bar rolling down through the snow, like a detuned set.
+        rollY = (rollY + 0.012) % 1;
+        context.fillStyle = "rgb(0 0 0 / 0.45)";
+        context.fillRect(0, rollY * height, width, height * 0.12);
+        context.globalAlpha = 1;
+      }
+      // Torn color bands in the first moments.
+      if (elapsed < 420) {
+        for (let band = 0; band < 6; band += 1) {
+          context.fillStyle = pick(["rgb(255 60 140 / 0.4)", "rgb(60 220 255 / 0.4)", "rgb(255 240 210 / 0.5)"]);
+          context.fillRect(snap(rand(-0.2, 0.5) * width, 8), snap(Math.random() * height, 4), width * rand(0.3, 0.9), pick([2, 4, 10, 18]));
+        }
+      }
+      // Shockwave rings, racing out to the corners and thinning as they go.
+      for (const ring of rings) {
+        const t = (elapsed - ring.delay) / (900 / ring.speed);
+        if (t <= 0 || t >= 1) continue;
+        const eased = 1 - (1 - t) ** 3;
+        context.beginPath();
+        context.arc(cx, cy, eased * diagonal * 1.1, 0, Math.PI * 2);
+        context.lineWidth = ring.width * (1 - t) + 1;
+        context.strokeStyle = `rgb(255 ${Math.round(236 - 80 * t)} ${Math.round(200 - 140 * t)} / ${(0.9 * (1 - t)).toFixed(3)})`;
+        context.stroke();
+      }
+      // The core: a hot point that blooms and collapses in about 0.5 s.
+      const coreT = elapsed / 520;
+      if (coreT < 1) {
+        const glow = coreT < 0.18 ? coreT / 0.18 : (1 - coreT) / 0.82;
+        const radius = Math.min(width, height) * (0.06 + 0.22 * Math.min(1, coreT * 2.5));
+        const gradient = context.createRadialGradient(cx, cy, 0, cx, cy, radius);
+        gradient.addColorStop(0, `rgb(255 255 255 / ${(0.95 * glow).toFixed(3)})`);
+        gradient.addColorStop(0.25, `rgb(255 226 170 / ${(0.75 * glow).toFixed(3)})`);
+        gradient.addColorStop(1, "transparent");
+        context.fillStyle = gradient;
+        context.fillRect(cx - radius, cy - radius, radius * 2, radius * 2);
+      }
+    }
+    if (!blackFired && elapsed >= ENDING_BLACK_MS) {
+      blackFired = true;
+      onBlack();
+    }
+    if (!riseFired && elapsed >= ENDING_BLACK_MS + ENDING_SILENCE_MS) {
+      riseFired = true;
+      onRise();
+    }
+    if (elapsed >= total) finish();
+    else frame = requestAnimationFrame(step);
+  };
+  frame = requestAnimationFrame(step);
+
+  return () => {
+    for (const animation of animations) animation.cancel();
+    finish();
+  };
+}
 
 /** Plays one transition. The cut and the end are reported through the callbacks. */
 export function runPeekTransition(kind: PeekTransitionKind, { host, fx, onCut, onDone }: TransitionTargets): CancelTransition {
