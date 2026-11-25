@@ -9,6 +9,12 @@ import type { SceneData, ScenePointer, ShowcaseScene, ThreeModule } from "./type
  * The parts are the film's own (gotAstrolabe, gotBuilders), unmodified; this
  * scene supplies the camera, ground and timing. Its skill data is the film's,
  * which still comes from the mock until the skills consolidation.
+ *
+ * In the quick peek (HD-12) the sun and rings are skipped: the opening is too
+ * slow for a few seconds' glimpse. Instead one of the film's destinations,
+ * picked at random and built ahead, is shown assembling, with the camera at
+ * the place from the first frame. That runs on the peek's own clock (dt), so
+ * the peek's speed-up and random start apply; the slow tour keeps the loop.
  */
 
 // The loop, in seconds.
@@ -179,6 +185,27 @@ export async function createGotSkillzScene(THREE: ThreeModule, data: SceneData):
   scene.add(engine.group);
   engine.grow(0, 0, 0);
 
+  // The peek's destination: any of the film's places with a construct and
+  // skills to build it from, chosen once and built now so showing it is instant.
+  const destinations = places.filter((place) => KIND_BY_PLACE[place.slug] && towersOf(place.slug).length > 0);
+  const chosen = destinations[Math.floor(Math.random() * destinations.length)];
+  const peekEngine = chosen
+    ? byKind[KIND_BY_PLACE[chosen.slug]](towersOf(chosen.slug), tallest, undefined, {
+        title: chosen.name.split(" (")[0],
+        accent: data.portfolio.cores.find((core) => core.slug === chosen.slug)?.color ?? "#ffb266",
+        house: chosen.slug,
+      })
+    : null;
+  if (peekEngine) {
+    peekEngine.group.position.copy(engine.group.position);
+    peekEngine.group.visible = false;
+    peekEngine.grow(0, 0, 0);
+    scene.add(peekEngine.group);
+  }
+  let peekOn = false;
+  // Seconds of peek time this scene has run (run-ahead and speed-up included).
+  let peekClock = 0;
+
   // A black sheet in front of the camera, for the fade between loops.
   const veil = new THREE.Mesh(
     new THREE.PlaneGeometry(4, 4),
@@ -200,9 +227,43 @@ export async function createGotSkillzScene(THREE: ThreeModule, data: SceneData):
     scene,
     camera,
     progress: () => 1,
-    update(_dt: number, pointer: ScenePointer, visible: boolean) {
+    setPeek(on: boolean) {
+      if (on === peekOn) return;
+      peekOn = on;
+      const destination = on && peekEngine !== null;
+      astrolabe.group.visible = !destination;
+      halo.visible = !destination;
+      engine.group.visible = !destination;
+      if (peekEngine) peekEngine.group.visible = destination;
+      // Out of the peek, the slow tour's loop starts from its opening.
+      if (!on) shownAt = null;
+    },
+    update(dt: number, pointer: ScenePointer, visible: boolean) {
       if (!visible) {
         shownAt = null;
+        return;
+      }
+      if (peekOn && peekEngine) {
+        // The destination assembling, then turning, on a loop that skips the
+        // opening (sun and rings) and the fade.
+        peekClock += dt;
+        const span = HOLD_UNTIL - TREE_START;
+        const t = TREE_START + 0.5 + (peekClock % (span - 0.5));
+        peekEngine.grow(smooth(TREE_START, TREE_START + TREE_LEN, t), peekClock * 0.6, 1);
+        veil.material.opacity = 0;
+        drift.set(pointer.x * 30, -pointer.y * 16, 0);
+        const orbit = 0.4 + peekClock * 0.05;
+        const reach = peekEngine.reach * 2.4;
+        const place = peekEngine.group.position;
+        camera.position
+          .set(
+            place.x + Math.sin(orbit) * reach,
+            place.y + peekEngine.top * 0.5 + 10,
+            place.z + Math.cos(orbit) * reach,
+          )
+          .add(drift);
+        aim.set(place.x, place.y + peekEngine.top * 0.45, place.z);
+        camera.lookAt(aim);
         return;
       }
       // Each showing starts the loop from the beginning.
