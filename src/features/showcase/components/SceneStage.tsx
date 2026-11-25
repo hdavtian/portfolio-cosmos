@@ -4,6 +4,7 @@ import type { TechStackTreeNode } from "@hd/content-schema/tech-stack-tree";
 import type { ShowcaseProject } from "../lib/useShowcaseProjects";
 import { SCENE_DEFINITIONS } from "../scenes/registry";
 import { PeekTitle } from "./PeekTitle";
+import { PEEK_TRANSITIONS, runPeekTransition, shuffled, type CancelTransition } from "../lib/peekTransitions";
 import { trackEvent } from "../../../lib/analytics";
 import { EMPTY_PORTFOLIO, type SceneData, type SceneJob, type ScenePortfolio, type ShowcaseScene } from "../scenes/types";
 
@@ -103,6 +104,21 @@ const PEEK_SPEED = 3;
  * away from the scenes, and the names mean little to visitors. True brings them back.
  */
 const SHOW_PEEK_TITLES = false;
+/*
+ * Random start points: before a scene's turn in the peek, it is run ahead in
+ * the background by a random amount of its own time, so the peek shows a
+ * random moment rather than always the opening seconds. Run in 0.1 s steps
+ * (the largest step scenes get anyway), within a small time budget per frame.
+ */
+const PREROLL_RANGE_S: [number, number] = [4, 40];
+/** The first scene has nothing playing in front of it, so its run-ahead is kept short. */
+const PREROLL_FIRST_RANGE_S: [number, number] = [2, 14];
+const PREROLL_STEP_S = 0.1;
+const PREROLL_BUDGET_MS = 4;
+/** The first scene waits at most this long for its run-ahead before showing. */
+const PREROLL_FIRST_WAIT_MS = 1_500;
+
+const randomIn = ([min, max]: [number, number]) => min + Math.random() * (max - min);
 
 type PeekPhase = "preview" | "boom" | "done";
 
@@ -131,6 +147,12 @@ const readPlatePreference = () => {
   } catch {
     return false;
   }
+};
+
+/** The next scene in the peek after `id`, skipping any that failed to load. */
+const nextPeekSceneAfter = (id: string, failed: Set<string>) => {
+  const index = SCENE_DEFINITIONS.findIndex((definition) => definition.id === id);
+  return SCENE_DEFINITIONS.slice(index + 1).find((definition) => !failed.has(definition.id))?.id;
 };
 
 const isSceneSurface =(target: EventTarget | null) =>
@@ -162,7 +184,25 @@ export function SceneStage({ projects, techStack, highlights, portfolio, profile
   const [plateOpen, setPlateOpen] = useState(readPlatePreference);
   const [peekPhase, setPeekPhase] = useState<PeekPhase>(() => (readPeekWanted() ? "preview" : "done"));
   // Loop-side peek state: time in the current slot, total peek time, flash time.
-  const peekRef = useRef({ phase: peekPhase, slot: 0, total: 0, boom: 0, switched: false });
+  const peekRef = useRef({
+    phase: peekPhase,
+    slot: 0,
+    total: 0,
+    boom: 0,
+    switched: false,
+    // A transition between peek scenes is playing.
+    transitioning: false,
+    // A fresh order of transition effects each session.
+    effects: shuffled(PEEK_TRANSITIONS),
+    effectIndex: 0,
+    // Random run-ahead per scene (seconds of scene time), and how much is done.
+    offsets: new Map<string, number>(),
+    rolled: new Map<string, number>(),
+    // When the first scene became ready, for its run-ahead wait.
+    firstReadyAt: 0,
+  });
+  const fxRef = useRef<HTMLCanvasElement>(null);
+  const cancelTransitionRef = useRef<CancelTransition | null>(null);
   const barRef = useRef<HTMLDivElement>(null);
   const cutRef = useRef<HTMLDivElement>(null);
   const failedRef = useRef(new Set<string>());
@@ -220,11 +260,13 @@ export function SceneStage({ projects, techStack, highlights, portfolio, profile
     }, LEAVE_MS);
   }, []);
 
-  // Peek: a hard cut with a short pop, not the slow glitch.
-  const cutTo = useCallback((id: string) => {
+  // A hard cut, not the slow glitch; with a short pop unless a peek
+  // transition is already covering it.
+  const cutTo = useCallback((id: string, pop = true) => {
     activeRef.current = id;
     activeSinceRef.current = performance.now();
     setActiveId(id);
+    if (!pop) return;
     cutRef.current?.animate(
       [
         { opacity: 0.55, backdropFilter: "blur(6px) brightness(1.6)" },
@@ -242,7 +284,9 @@ export function SceneStage({ projects, techStack, highlights, portfolio, profile
   const startBoom = useCallback(
     (outcome: "completed" | "skipped") => {
       if (peekRef.current.phase !== "preview") return;
-      Object.assign(peekRef.current, { boom: 0, switched: false });
+      cancelTransitionRef.current?.();
+      cancelTransitionRef.current = null;
+      Object.assign(peekRef.current, { boom: 0, switched: false, transitioning: false });
       setPeek("boom");
       trackEvent("showcase_quick_peek", { outcome, scene_id: activeRef.current });
     },
@@ -359,6 +403,8 @@ export function SceneStage({ projects, techStack, highlights, portfolio, profile
       const worldUp = new THREE.Vector3(0, 1, 0);
       // The peek's slow lens zoom, eased back to 1 when the peek ends.
       let peekZoom = 1;
+      const failed = failedRef.current;
+      const nextPeekScene = (id: string) => nextPeekSceneAfter(id, failed);
 
       const reported = new Map<string, string>();
       const report = (id: string, status: SceneStatus) => {
@@ -410,9 +456,37 @@ export function SceneStage({ projects, techStack, highlights, portfolio, profile
           report(definition.id, { phase: progress >= 1 ? "ready" : "loading", progress });
         }
 
+        // Peek run-ahead: the scene up next (or the first, before anything
+        // shows) is moved to its random start point, a little each frame.
+        const peekNow = peekRef.current;
+        let firstRunAheadDone = true;
+        if (peekNow.phase === "preview") {
+          const upNext = activeRef.current
+            ? nextPeekScene(activeRef.current)
+            : SCENE_DEFINITIONS.find((definition) => !failedRef.current.has(definition.id))?.id;
+          const scene = upNext ? scenesRef.current.get(upNext) : undefined;
+          if (upNext && scene && scene.progress() >= 1) {
+            if (!peekNow.offsets.has(upNext)) {
+              peekNow.offsets.set(upNext, randomIn(activeRef.current ? PREROLL_RANGE_S : PREROLL_FIRST_RANGE_S));
+            }
+            const target = peekNow.offsets.get(upNext) ?? 0;
+            let rolled = peekNow.rolled.get(upNext) ?? 0;
+            const started = performance.now();
+            while (rolled < target && performance.now() - started < PREROLL_BUDGET_MS) {
+              scene.update(PREROLL_STEP_S, smoothed, true);
+              rolled += PREROLL_STEP_S;
+            }
+            peekNow.rolled.set(upNext, rolled);
+            if (!activeRef.current) {
+              peekNow.firstReadyAt ||= now;
+              firstRunAheadDone = rolled >= target || now - peekNow.firstReadyAt > PREROLL_FIRST_WAIT_MS;
+            }
+          }
+        }
+
         // First showing: the first scene in tour order that is ready, unless an
         // earlier one is still loading (the tour order is the intended opening).
-        if (!activeRef.current) {
+        if (!activeRef.current && firstRunAheadDone) {
           for (const definition of SCENE_DEFINITIONS) {
             const scene = scenesRef.current.get(definition.id);
             if (!scene) break;
@@ -437,14 +511,36 @@ export function SceneStage({ projects, techStack, highlights, portfolio, profile
         if (peek.phase === "preview" && activeRef.current && !transitionRef.current) {
           peek.slot += frameMs;
           peek.total += frameMs;
-          if (peek.slot >= PEEK_SLOT_MS) {
-            const index = SCENE_DEFINITIONS.findIndex((definition) => definition.id === activeRef.current);
-            const next = SCENE_DEFINITIONS.slice(index + 1).find((definition) => !failedRef.current.has(definition.id));
+          if (peek.slot >= PEEK_SLOT_MS && !peek.transitioning) {
+            const next = nextPeekScene(activeRef.current);
             if (!next) {
               startBoom("completed");
-            } else if ((scenesRef.current.get(next.id)?.progress() ?? 0) >= 1) {
-              peek.slot = 0;
-              cutTo(next.id);
+            } else if ((scenesRef.current.get(next)?.progress() ?? 0) >= 1) {
+              // A different jagged transition for each cut; the scene swaps
+              // at its darkest moment.
+              const host = hostRef.current;
+              const fx = fxRef.current;
+              if (host && fx) {
+                peek.transitioning = true;
+                const kind = peek.effects[peek.effectIndex % peek.effects.length];
+                peek.effectIndex += 1;
+                cancelTransitionRef.current = runPeekTransition(kind, {
+                  host,
+                  fx,
+                  onCut: () => {
+                    if (peekRef.current.phase !== "preview") return;
+                    peekRef.current.slot = 0;
+                    cutTo(next, false);
+                  },
+                  onDone: () => {
+                    peekRef.current.transitioning = false;
+                    cancelTransitionRef.current = null;
+                  },
+                });
+              } else {
+                peek.slot = 0;
+                cutTo(next);
+              }
             }
           }
         }
@@ -564,6 +660,7 @@ export function SceneStage({ projects, techStack, highlights, portfolio, profile
 
       cleanup = () => {
         cancelAnimationFrame(frame);
+        cancelTransitionRef.current?.();
         document.removeEventListener("visibilitychange", onVisibility);
         window.removeEventListener("pointermove", onPointerMove);
         window.removeEventListener("wheel", onWheel);
@@ -636,6 +733,7 @@ export function SceneStage({ projects, techStack, highlights, portfolio, profile
         <div className="showcase-scenes__mood" />
         <div className="showcase-scenes__mood showcase-scenes__mood--lift" />
         <div className="showcase-scenes__shade" />
+        <canvas ref={fxRef} className="showcase-scenes__fx" />
         <div ref={cutRef} className="showcase-scenes__cut" />
         {peekPhase === "boom" ? <div className="showcase-peek-boom" style={{ animationDuration: `${BOOM_MS}ms` }} /> : null}
       </div>
