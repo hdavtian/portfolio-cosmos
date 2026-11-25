@@ -287,6 +287,8 @@ export function SceneStage({ projects, techStack, highlights, portfolio, profile
   const setPeek = useCallback((phase: PeekPhase) => {
     peekRef.current.phase = phase;
     setPeekPhase(phase);
+    // Scenes hear when the peek (and its ending) is over.
+    for (const scene of scenesRef.current.values()) scene.setPeek?.(phase !== "done");
   }, []);
 
   const startBoom = useCallback(
@@ -747,6 +749,7 @@ export function SceneStage({ projects, techStack, highlights, portfolio, profile
           scene.resize(size.width, size.height);
           scene.setHighlights?.(highlightsRef.current);
           scene.setFocusProject?.(focusRef.current);
+          scene.setPeek?.(peekRef.current.phase !== "done");
           scenesRef.current.set(definition.id, scene);
         } catch {
           failedRef.current.add(definition.id);

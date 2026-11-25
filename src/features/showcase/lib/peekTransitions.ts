@@ -353,12 +353,96 @@ const FACTORIES: Record<PeekTransitionKind, () => Effect> = {
  *      One flash over a small area, so it is not blinding.
  *   2. Static: heavy TV snow takes over and dies away while the picture
  *      fades to black (`onBlack` fires once it is black).
- *   3. Silence: nothing for three seconds.
+ *   3. The gap (three seconds): TV color bars drop in, hold with a sync
+ *      wobble, and switch off to a dot, with black either side.
  *   4. The first scene fades in (`onRise` fires as it starts).
  */
 export const ENDING_BLACK_MS = 2_200;
 export const ENDING_SILENCE_MS = 3_000;
 export const ENDING_RISE_MS = 2_000;
+
+/* Classic test-card bars, toned to 75% like the broadcast ones. */
+const BARS_TOP = ["#bfbfbf", "#bfbf00", "#00bfbf", "#00bf00", "#bf00bf", "#bf0000", "#0000bf"];
+const BARS_STRIP = ["#0000bf", "#131313", "#bf00bf", "#131313", "#00bfbf", "#131313", "#bfbfbf"];
+/** Each bar's drop-in delay, shuffled once so they land out of order. */
+const BAR_DELAYS = BARS_TOP.map(() => Math.random() * 0.35);
+
+/**
+ * The bars in the gap after the static, u = 0..1 across it:
+ *   0.00-0.12  black
+ *   0.12-0.42  bars drop in from the top, out of order, in jerky steps
+ *   0.42-0.75  hold, with a horizontal-sync wobble and a rolling dark band
+ *   0.75-0.88  collapse like a set switching off: to a bright line, then a dot
+ *   0.88-1.00  black, then the slow tour fades in
+ */
+function drawColorBars(context: CanvasRenderingContext2D, u: number, width: number, height: number) {
+  if (u < 0.12 || u > 0.88) return;
+  const barWidth = width / BARS_TOP.length;
+  const topHeight = height * 0.78;
+  if (u < 0.75) {
+    context.save();
+    context.globalAlpha = 0.85;
+    const holding = u >= 0.42;
+    // Horizontal sync slipping: the whole picture jerks sideways now and then.
+    const slip = holding && Math.random() < 0.18 ? snap(rand(-24, 24), 6) : 0;
+    BARS_TOP.forEach((color, index) => {
+      const start = 0.12 + BAR_DELAYS[index] * (0.42 - 0.12 - 0.1) / 0.35;
+      const drop = Math.min(1, Math.max(0, (u - start) / 0.1));
+      if (drop <= 0) return;
+      // Stepped fall: the bar arrives in four jerks.
+      const shown = Math.ceil(drop * 4) / 4;
+      const x = index * barWidth + slip;
+      context.fillStyle = color;
+      context.fillRect(Math.floor(x), 0, Math.ceil(barWidth) + 1, topHeight * shown);
+      if (shown >= 1) {
+        context.fillStyle = BARS_STRIP[index];
+        context.fillRect(Math.floor(x), topHeight, Math.ceil(barWidth) + 1, height * 0.08);
+        // The bottom band: white, black and the dark steps.
+        context.fillStyle = index < 2 ? "#0a1a40" : index < 4 ? "#ebebeb" : index < 5 ? "#2b0a50" : "#131313";
+        context.fillRect(Math.floor(x), topHeight + height * 0.08, Math.ceil(barWidth) + 1, height * 0.14);
+      }
+    });
+    if (holding) {
+      // A darker band rolling down, and a few lines of noise.
+      const roll = ((u - 0.42) / 0.33) * 1.4 - 0.2;
+      context.globalAlpha = 0.35;
+      context.fillStyle = "#000";
+      context.fillRect(0, roll * height, width, height * 0.1);
+      context.globalAlpha = 0.5;
+      context.fillStyle = "#fff";
+      for (let line = 0; line < 3; line += 1) context.fillRect(0, snap(Math.random() * height, 2), width, 1);
+    }
+    context.restore();
+    return;
+  }
+  // Switching off: squeeze to a line, then shrink to a dot.
+  const off = (u - 0.75) / 0.13;
+  const cx = width / 2;
+  const cy = height / 2;
+  if (off < 0.5) {
+    const lineHeight = Math.max(2, height * (1 - off / 0.5) ** 3);
+    context.globalAlpha = 0.85;
+    BARS_TOP.forEach((color, index) => {
+      context.fillStyle = color;
+      context.fillRect(Math.floor(index * barWidth), cy - lineHeight / 2, Math.ceil(barWidth) + 1, lineHeight);
+    });
+    context.globalAlpha = 0.6 * (off / 0.5);
+    context.fillStyle = "#fff";
+    context.fillRect(0, cy - 1, width, 2);
+  } else {
+    const k = (off - 0.5) / 0.5;
+    const lineWidth = width * (1 - k) ** 2;
+    context.globalAlpha = 0.9;
+    context.fillStyle = "#fff";
+    context.fillRect(cx - lineWidth / 2, cy - 1, lineWidth, 2);
+    const glow = context.createRadialGradient(cx, cy, 0, cx, cy, 14);
+    glow.addColorStop(0, `rgb(255 255 255 / ${(1 - k).toFixed(2)})`);
+    glow.addColorStop(1, "transparent");
+    context.fillStyle = glow;
+    context.fillRect(cx - 14, cy - 14, 28, 28);
+  }
+  context.globalAlpha = 1;
+}
 
 interface EndingTargets {
   /** The scene layer that jolts. */
@@ -439,6 +523,25 @@ export function runPeekEnding({ host, fade, fx, onBlack, onRise }: EndingTargets
     const cy = height / 2;
     const diagonal = Math.hypot(width, height) / 2;
     clear();
+    // Real black: as the scene layer fades out, the site's light backdrop
+    // would show through it. Black rises with the fade, holds through the
+    // gap, and lifts as the slow tour fades in, in step with the scene layer.
+    if (context) {
+      const fadeFrom = 0.25 * ENDING_BLACK_MS;
+      const riseAt = ENDING_BLACK_MS + ENDING_SILENCE_MS;
+      const cover =
+        elapsed < fadeFrom
+          ? 0
+          : elapsed < ENDING_BLACK_MS
+            ? (elapsed - fadeFrom) / (ENDING_BLACK_MS - fadeFrom)
+            : elapsed < riseAt
+              ? 1
+              : Math.max(0, 1 - (elapsed - riseAt) / ENDING_RISE_MS);
+      if (cover > 0) {
+        context.fillStyle = `rgb(3 5 10 / ${cover.toFixed(3)})`;
+        context.fillRect(0, 0, width, height);
+      }
+    }
     if (context && elapsed < ENDING_BLACK_MS) {
       // Static: swells in fast after the hit, then dies away to nothing.
       const snow = elapsed < 150 ? elapsed / 150 : Math.max(0, 1 - (elapsed - 150) / (ENDING_BLACK_MS - 150)) ** 1.4;
@@ -492,6 +595,9 @@ export function runPeekEnding({ host, fade, fx, onBlack, onRise }: EndingTargets
         context.fillRect(cx - radius, cy - radius, radius * 2, radius * 2);
       }
     }
+    // TV color bars in the gap before the slow tour (see drawColorBars).
+    const inGap = elapsed - ENDING_BLACK_MS;
+    if (context && inGap > 0 && inGap < ENDING_SILENCE_MS) drawColorBars(context, inGap / ENDING_SILENCE_MS, width, height);
     if (!blackFired && elapsed >= ENDING_BLACK_MS) {
       blackFired = true;
       onBlack();

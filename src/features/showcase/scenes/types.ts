@@ -94,6 +94,11 @@ export interface ShowcaseScene {
   /** Project open on the page (scenes may bring it into view). */
   setFocusProject?(projectId: string | null): void;
   /**
+   * The quick peek has started (true) or ended (false). A scene whose opening
+   * is slow can show its most engaging part instead while the peek is on.
+   */
+  setPeek?(on: boolean): void;
+  /**
    * Draws the frame, for a scene that needs more than one plain render (post
    * effects). The host has already applied the visitor's zoom and look-around
    * to the camera. Without it the host renders the scene directly.
