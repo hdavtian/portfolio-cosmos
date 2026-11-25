@@ -115,6 +115,18 @@ const PEEK_SPEED = 2.3;
 const FLYBY_FIRST_S: [number, number] = [6, 12];
 const FLYBY_EVERY_S: [number, number] = [20, 40];
 const FLYBY_PRELOAD_DELAY_MS = 3_000;
+/*
+ * In the slow tour every scene opens in its random tone, holds it this long,
+ * then flickers to its own colors and stays there: a tone washes out real
+ * color, such as the screenshots in the gallery and portfolio. (The peek
+ * keeps its tones throughout.)
+ */
+const TRUE_COLOR_AFTER_MS = 3_000;
+/**
+ * The flicker, as ms after the hold: off, on, off, on, then off for good.
+ * Two returns of the tone in about half a second, under three flashes a second.
+ */
+const TRUE_COLOR_FLICKER = [90, 200, 290, 470];
 /**
  * The per-scene titles (PeekTitle). Off since HD-12 review: they pulled the eye
  * away from the scenes, and the names mean little to visitors. True brings them back.
@@ -466,6 +478,10 @@ export function SceneStage({ projects, techStack, highlights, portfolio, profile
       // The scene the current tone was picked for, and that tone.
       let toneSceneId: string | null = null;
       let toneForScene = "";
+      // When the current scene came on (for the true-color release below).
+      let toneSince = 0;
+      // When the slow tour began (the peek's end, or the first frame without one).
+      let tourStartedAt = 0;
       const failed = failedRef.current;
       const nextPeekScene = (id: string) => nextPeekSceneAfter(id, failed);
 
@@ -635,10 +651,25 @@ export function SceneStage({ projects, techStack, highlights, portfolio, profile
           // with the scene: under a peek transition, or mid-glitch in the tour.
           if (activeRef.current !== toneSceneId) {
             toneSceneId = activeRef.current;
-            const choices = PEEK_TONES.filter((candidate) => candidate !== toneWritten);
+            toneSince = now;
+            // Never the tone picked last time (which may already have been released).
+            const choices = PEEK_TONES.filter((candidate) => candidate !== toneForScene);
             toneForScene = toneSceneId ? choices[Math.floor(Math.random() * choices.length)] : "";
           }
-          const tone = toneForScene;
+          let tone = toneForScene;
+          // In the slow tour the tone only opens a scene, then flickers off to
+          // show the scene as it really is. Timed from the later of the scene
+          // coming on and the slow tour starting (after the peek, the first
+          // scene goes in during the black, three seconds before the tour).
+          if (peek.phase === "done") tourStartedAt ||= now;
+          if (peek.phase === "done" && toneSceneId) {
+            const after = now - Math.max(toneSince, tourStartedAt) - TRUE_COLOR_AFTER_MS;
+            if (after >= 0) {
+              const step = TRUE_COLOR_FLICKER.findIndex((until) => after < until);
+              // Even steps of the flicker are untoned, odd ones toned; past the end, untoned.
+              tone = step >= 0 && step % 2 === 1 ? toneForScene : "";
+            }
+          }
           if (tone !== toneWritten) {
             slideEl.style.filter = tone;
             toneWritten = tone;
