@@ -24,32 +24,6 @@
   pointer-events: none;
 }
 
-/* The end of the peek: a warm sun swells from the center and fades. Capped
-   well short of white so it reads as a boom without blinding. */
-.showcase-peek-boom {
-  position: absolute;
-  inset: -20%;
-  pointer-events: none;
-  background: radial-gradient(
-    circle at 50% 50%,
-    rgb(255 246 222 / 0.95) 0%,
-    rgb(255 205 140 / 0.7) 12%,
-    rgb(255 150 80 / 0.28) 32%,
-    transparent 62%
-  );
-  mix-blend-mode: screen;
-  opacity: 0;
-  transform: scale(0.15);
-  animation: showcase-peek-boom ease-out forwards;
-}
-
-@keyframes showcase-peek-boom {
-  0% { opacity: 0; transform: scale(0.15); }
-  22% { opacity: 0.62; transform: scale(1); }
-  40% { opacity: 0.5; transform: scale(1.25); }
-  100% { opacity: 0; transform: scale(1.6); }
-}
-
 /* The title of the scene playing in the peek, centered over everything but the nav. */
 .showcase-peek {
   position: fixed;
