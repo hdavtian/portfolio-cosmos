@@ -1,3 +1,10 @@
+import {
+  collectionSchemas,
+  singletonSchemas,
+  type CollectionName,
+  type SingletonName,
+} from "@hd/content-schema";
+
 // Describes what publishing would change, by comparing the drafts with the live
 // release record by record. Comparing content (not update timestamps) means an
 // edit that was undone is not reported, and deletions are.
@@ -60,6 +67,7 @@ const SINGLETON_NAMES: Record<string, string> = {
 const FIELD_NAMES: Record<string, string> = {
   galleryMedia: "gallery",
   clientVariants: "client sites",
+  links: "links",
   mediaId: "image",
   coreSlug: "core",
   categorySlug: "category",
@@ -169,4 +177,27 @@ export function summarizeChanges(live: ContentSide, draft: ContentSide): string[
   }
 
   return lines;
+}
+
+/**
+ * The live release with today's schema defaults applied, the same way drafts
+ * are read for comparison. A field added after the release was published
+ * (e.g. project links, HD-13) is then empty on both sides instead of every
+ * record reading as changed. Records that no longer validate are kept as stored.
+ */
+export function withSchemaDefaults(side: ContentSide): ContentSide {
+  const collections: Record<string, Record<string, unknown>[]> = {};
+  for (const [name, records] of Object.entries(side.collections ?? {})) {
+    const schema = collectionSchemas[name as CollectionName];
+    collections[name] = (records ?? []).map((record) => {
+      const parsed = schema?.safeParse(record);
+      return (parsed?.success ? parsed.data : record) as Record<string, unknown>;
+    });
+  }
+  const singletons: Record<string, unknown> = {};
+  for (const [key, value] of Object.entries(side.singletons ?? {})) {
+    const parsed = singletonSchemas[key as SingletonName]?.safeParse(value);
+    singletons[key] = parsed?.success ? parsed.data : value;
+  }
+  return { ...side, singletons, collections };
 }

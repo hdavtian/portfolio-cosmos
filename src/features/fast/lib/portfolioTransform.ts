@@ -1,6 +1,6 @@
-import type { ClientVariant, GalleryItem, PortfolioEntry } from "@hd/content-schema";
+import type { ClientVariant, GalleryItem, PortfolioEntry, ProjectLink } from "@hd/content-schema";
 import { mediaUrl, type Release } from "../../../lib/api/release";
-import type { PortfolioItem, PortfolioMedia } from "../types";
+import type { PortfolioItem, PortfolioLink, PortfolioMedia } from "../types";
 
 /**
  * The published projects as the pages list them: one item per entry, or one
@@ -42,6 +42,9 @@ export function portfolioItemsFromRelease(release: Release): PortfolioItem[] {
   return [...items.values()];
 }
 
+const links = (items: readonly ProjectLink[] | undefined): PortfolioLink[] =>
+  (items ?? []).map((link) => ({ url: link.url, label: link.label, description: link.description ?? "" }));
+
 const gallery = (release: Release, media: GalleryItem[]): PortfolioMedia[] =>
   media.map((item) => ({
     id: item.slug,
@@ -71,6 +74,8 @@ function entryItem(
     subcategory: "General",
     detailMedia: withCover(entry.slug, entry.title, entry.description, image, gallery(release, entry.galleryMedia)),
     isClientVariation: false,
+    // A release published before HD-13 has no links.
+    links: links(entry.links),
   };
 }
 
@@ -98,6 +103,7 @@ function variantItem(
     subcategory: parent.title,
     detailMedia: withCover(variant.slug, variant.title, variant.description, image, gallery(release, media)),
     isClientVariation: true,
+    links: links(variant.links),
   };
 }
 

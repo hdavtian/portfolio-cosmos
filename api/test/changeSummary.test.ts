@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { summarizeChanges, type ContentSide } from "../src/v2/changeSummary.js";
+import { summarizeChanges, withSchemaDefaults, type ContentSide } from "../src/v2/changeSummary.js";
 
 const side = (collections: ContentSide["collections"], singletons: ContentSide["singletons"] = {}): ContentSide => ({
   singletons,
@@ -71,5 +71,44 @@ describe("summarizeChanges", () => {
     const live = side({}, { profile: { name: "H", summary: "old" } });
     const draft = side({}, { profile: { name: "H", summary: "new" } });
     expect(summarizeChanges(live, draft)).toEqual(["Updated profile (summary)"]);
+  });
+});
+
+describe("withSchemaDefaults", () => {
+  // A full portfolio entry as a release published before HD-13 stored it: no links.
+  const entry = {
+    slug: "hydrodent",
+    sortOrder: 0,
+    coreSlug: "stormscape",
+    placement: { plane: 0, ring: 0 },
+    title: "Hydrodent",
+    mediaId: "6b078edeb293a4d906c3a162",
+    description: "A dental catalog.",
+    technologySlugs: [],
+    year: 2026,
+    fit: "cover",
+    galleryMedia: [],
+    clientVariants: [],
+  };
+
+  it("does not report a field added after the release was published as a change", () => {
+    const live = side({ portfolioEntries: [entry] });
+    // Drafts are read through the schema, which adds the empty list.
+    const draft = side({ portfolioEntries: [{ ...entry, links: [] }] });
+    expect(summarizeChanges(live, draft)).toEqual(['Updated project "Hydrodent" (links)']);
+    expect(summarizeChanges(withSchemaDefaults(live), draft)).toEqual([]);
+  });
+
+  it("still reports real link changes", () => {
+    const live = withSchemaDefaults(side({ portfolioEntries: [entry] }));
+    const draft = side({
+      portfolioEntries: [{ ...entry, links: [{ url: "https://example.com/", label: "Live site", description: "" }] }],
+    });
+    expect(summarizeChanges(live, draft)).toEqual(['Updated project "Hydrodent" (links)']);
+  });
+
+  it("keeps a record that no longer validates as stored", () => {
+    const broken = { slug: "x", sortOrder: 0 };
+    expect(withSchemaDefaults(side({ portfolioEntries: [broken] })).collections.portfolioEntries).toEqual([broken]);
   });
 });

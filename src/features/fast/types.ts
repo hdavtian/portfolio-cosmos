@@ -58,6 +58,15 @@ export interface PortfolioItem {
   subcategory: string;
   detailMedia: PortfolioMedia[];
   isClientVariation: boolean;
+  /** Links shown on the project's page (HD-13); a client site has its own, never the parent's. */
+  links: PortfolioLink[];
+}
+
+export interface PortfolioLink {
+  url: string;
+  label: string;
+  /** "" when there is none. */
+  description: string;
 }
 
 export interface ResumePayload {

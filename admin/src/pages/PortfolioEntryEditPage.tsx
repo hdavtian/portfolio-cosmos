@@ -1,4 +1,4 @@
-import type { ClientVariant, GalleryItem, PortfolioCore, PortfolioEntry } from "@hd/content-schema";
+import type { ClientVariant, GalleryItem, PortfolioCore, PortfolioEntry, ProjectLink } from "@hd/content-schema";
 import { ButtonComponent } from "@syncfusion/ej2-react-buttons";
 import { DropDownListComponent } from "@syncfusion/ej2-react-dropdowns";
 import { NumericTextBoxComponent, TextBoxComponent } from "@syncfusion/ej2-react-inputs";
@@ -42,6 +42,7 @@ const EMPTY: PortfolioEntry = {
   year: null,
   fit: "cover",
   galleryMedia: [],
+  links: [],
   clientVariants: [],
 };
 
@@ -70,6 +71,14 @@ const trimGallery = (
   });
 };
 
+/** Links as typed, trimmed (records saved before HD-13 have none). */
+const trimLinks = (links: ProjectLink[] | undefined): ProjectLink[] =>
+  (links ?? []).map((link) => ({
+    url: link.url.trim(),
+    label: link.label.trim(),
+    description: (link.description ?? "").trim(),
+  }));
+
 /** Normalises editable text back into the shape the API validates. */
 const normalise = (draft: PortfolioEntry): PortfolioEntry => ({
   ...draft,
@@ -77,6 +86,7 @@ const normalise = (draft: PortfolioEntry): PortfolioEntry => ({
   title: draft.title.trim(),
   description: draft.description.trim(),
   galleryMedia: trimGallery(draft.galleryMedia, draft),
+  links: trimLinks(draft.links),
   clientVariants: draft.clientVariants.map((variant) => {
     const slug = variant.slug.trim() || suggestSlug(variant.title);
     return {
@@ -85,6 +95,7 @@ const normalise = (draft: PortfolioEntry): PortfolioEntry => ({
       title: variant.title.trim(),
       description: variant.description.trim(),
       galleryMedia: trimGallery(variant.galleryMedia, { ...variant, slug }),
+      links: trimLinks(variant.links),
     };
   }),
 });
@@ -248,6 +259,40 @@ function EntryEditor({ initial, initialVersion, updatedBy, isNew }: EditorProps)
     />
   );
 
+  const linksEditor = (items: ProjectLink[] | undefined, onChange: (items: ProjectLink[]) => void, prefix: string) => (
+    <ListEditor<ProjectLink>
+      title="Links"
+      description="Shown under the name on this project's page on the main site, in this order; each opens in a new tab. The Universe doesn't show them."
+      items={items ?? []}
+      onChange={onChange}
+      createItem={() => ({ url: "", label: "", description: "" })}
+      describeItem={(item, index) => item.label || item.url || `Link ${index + 1}`}
+      addLabel="Add link"
+      errors={sectionErrors(prefix)}
+      renderItem={(item, updateItem, index) => (
+        <>
+          <FormField label="URL" hint="Starts with https:// (or http://)" error={itemError(prefix, index, "url")}>
+            <TextBoxComponent
+              value={item.url}
+              placeholder="https://"
+              input={(e: { value: string }) => updateItem({ ...item, url: e.value })}
+            />
+          </FormField>
+          <FormField label="Label" hint="The link text visitors see, e.g. Live site" error={itemError(prefix, index, "label")}>
+            <TextBoxComponent value={item.label} input={(e: { value: string }) => updateItem({ ...item, label: e.value })} />
+          </FormField>
+          <FormField label="Description" hint="Optional; leave empty to show none" error={itemError(prefix, index, "description")}>
+            <TextBoxComponent
+              multiline
+              value={item.description ?? ""}
+              input={(e: { value: string }) => updateItem({ ...item, description: e.value })}
+            />
+          </FormField>
+        </>
+      )}
+    />
+  );
+
   return (
     <>
       <div className="admin-page-header">
@@ -374,6 +419,22 @@ function EntryEditor({ initial, initialVersion, updatedBy, isNew }: EditorProps)
 
       {galleryEditor(draft.galleryMedia, (items) => set("galleryMedia", items), "galleryMedia")}
 
+      {draft.clientVariants.length === 0 ? (
+        linksEditor(draft.links, (items) => set("links", items), "links")
+      ) : (
+        <section className="admin-card admin-section">
+          <div className="admin-section__header">
+            <div>
+              <h2>Links</h2>
+              <p className="admin-status" style={{ margin: "2px 0 0" }}>
+                This project has client sites, and on the main site each client site is its own project with its
+                own page. Add links on the client sites below.
+              </p>
+            </div>
+          </div>
+        </section>
+      )}
+
       <ListEditor<ClientVariant>
         title="Client sites"
         description="Effectively multiple galleries for one project. Three.js app: each client site becomes a tab above the image, and its tab shows that site's own image and gallery; the project's own image and gallery are then not shown in the card (a client site with an empty gallery borrows the project's). Tabs show 5 at a time, with arrows for more. HTML portfolio: each client site is a separate card."
@@ -388,6 +449,7 @@ function EntryEditor({ initial, initialVersion, updatedBy, isNew }: EditorProps)
           year: null,
           fit: "cover",
           galleryMedia: [],
+          links: [],
         })}
         describeItem={(item, index) => item.title || `Client site ${index + 1}`}
         addLabel="Add client site"
@@ -443,6 +505,7 @@ function EntryEditor({ initial, initialVersion, updatedBy, isNew }: EditorProps)
               (galleryMedia) => updateItem({ ...item, galleryMedia }),
               `clientVariants.${index}.galleryMedia`,
             )}
+            {linksEditor(item.links, (links) => updateItem({ ...item, links }), `clientVariants.${index}.links`)}
           </>
         )}
       />

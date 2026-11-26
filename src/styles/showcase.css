@@ -1936,6 +1936,49 @@ html.is-scene-dragging * {
   overflow-wrap: anywhere;
 }
 
+/* Project links (HD-13): under the name, each opens in a new tab. */
+.showcase-project__links {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 10px;
+}
+
+.showcase-project__links a {
+  font-size: 12px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--showcase-ink);
+  text-decoration: underline;
+  text-decoration-color: rgba(244, 241, 236, 0.35);
+  text-underline-offset: 3px;
+  overflow-wrap: anywhere;
+}
+
+.showcase-project__links a:hover {
+  text-decoration-color: currentColor;
+}
+
+.showcase-project__links a:focus-visible {
+  outline: 2px solid var(--showcase-ink);
+  outline-offset: 4px;
+}
+
+.showcase-project__link-arrow {
+  margin-left: 6px;
+  text-decoration: none;
+  display: inline-block;
+}
+
+.showcase-project__links p {
+  margin: 3px 0 0;
+  max-width: 46ch;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--showcase-ink-quiet);
+}
+
 .showcase-project__lead {
   margin: 0;
   max-width: 46ch;
