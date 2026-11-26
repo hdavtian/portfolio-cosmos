@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { hexColorSchema, mediaRefSchema, slugSchema, sortOrderSchema } from "./primitives.js";
+import { hexColorSchema, httpUrlSchema, mediaRefSchema, slugSchema, sortOrderSchema } from "./primitives.js";
 
 const text = (max = 500) => z.string().trim().min(1).max(max);
 
@@ -16,6 +16,16 @@ export const galleryItemSchema = z.object({
 
 const yearSchema = z.number().int().min(1990).max(2100).nullable();
 
+/**
+ * A link shown on a project's page on the main site (HD-13), e.g. the live
+ * site. URL and label are required; the description is optional ("" = none).
+ */
+export const projectLinkSchema = z.object({
+  url: httpUrlSchema,
+  label: text(120),
+  description: z.string().trim().max(500).default(""),
+});
+
 // A client site grouped under a portfolio entry (e.g. one restaurant site).
 export const clientVariantSchema = z.object({
   slug: slugSchema,
@@ -27,6 +37,8 @@ export const clientVariantSchema = z.object({
   year: yearSchema,
   fit: imageFitSchema,
   galleryMedia: z.array(galleryItemSchema).default([]),
+  /** Shown on this client site's own page on the main site (HD-13). */
+  links: z.array(projectLinkSchema).default([]),
 });
 
 // Appearance: the 3D layout groups entries into tilted planes of colored rings.
@@ -67,6 +79,12 @@ export const portfolioEntrySchema = z.object({
   year: yearSchema,
   fit: imageFitSchema,
   galleryMedia: z.array(galleryItemSchema).default([]),
+  /**
+   * Shown on the project's page on the main site (HD-13). An entry with client
+   * sites isn't listed there itself (each client site is), so its links live
+   * on the client sites instead.
+   */
+  links: z.array(projectLinkSchema).default([]),
   clientVariants: z.array(clientVariantSchema).default([]),
 });
 
@@ -91,4 +109,5 @@ export type PortfolioCore = z.infer<typeof portfolioCoreSchema>;
 export type PortfolioEntry = z.infer<typeof portfolioEntrySchema>;
 export type ClientVariant = z.infer<typeof clientVariantSchema>;
 export type GalleryItem = z.infer<typeof galleryItemSchema>;
+export type ProjectLink = z.infer<typeof projectLinkSchema>;
 export type MoonPortfolioMapping = z.infer<typeof moonPortfolioMappingSchema>;

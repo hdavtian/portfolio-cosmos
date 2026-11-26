@@ -7,6 +7,8 @@ import type { ApiErrorDetail } from "./apiClient";
 const FIELD_LABELS: Record<string, string> = {
   galleryMedia: "Gallery image",
   clientVariants: "Client site",
+  links: "Link",
+  url: "URL",
   positions: "Position",
   projects: "Project",
   jobMemories: "Memory",

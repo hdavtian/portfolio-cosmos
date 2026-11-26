@@ -11,7 +11,7 @@ import {
 import { createHash } from "node:crypto";
 import type { Db, Document } from "mongodb";
 import { ApiError } from "./http.js";
-import { summarizeChanges, type ContentSide } from "./changeSummary.js";
+import { summarizeChanges, withSchemaDefaults, type ContentSide } from "./changeSummary.js";
 import { fromDb, stripMeta, toDb } from "./storageCodec.js";
 
 export const RELEASES_COLLECTION = "releases";
@@ -358,7 +358,8 @@ export class ReleaseService {
     if (!release) return { neverPublished: true, lines: ["First publish"] };
 
     const draft = await this.readDraftsLeniently();
-    const lines = summarizeChanges(release.content as unknown as ContentSide, draft);
+    const live = withSchemaDefaults(release.content as unknown as ContentSide);
+    const lines = summarizeChanges(live, draft);
 
     // Alt text lives on the media record and is snapshotted at publish.
     const ids = Object.keys(release.media);
