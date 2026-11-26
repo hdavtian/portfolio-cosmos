@@ -232,7 +232,6 @@ export function SceneStage({ projects, techStack, highlights, portfolio, profile
   const fxRef = useRef<HTMLCanvasElement>(null);
   const slideRef = useRef<HTMLDivElement>(null);
   const plateTimerRef = useRef<HTMLSpanElement>(null);
-  const shipCanvasRef = useRef<HTMLCanvasElement>(null);
   const cancelTransitionRef = useRef<CancelTransition | null>(null);
   const barRef = useRef<HTMLDivElement>(null);
   const cutRef = useRef<HTMLDivElement>(null);
@@ -392,13 +391,31 @@ export function SceneStage({ projects, techStack, highlights, portfolio, profile
       renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.5));
       renderer.setClearColor(0x03050a, 1);
       host.appendChild(renderer.domElement);
-      const shipCanvas = shipCanvasRef.current;
-      const flyby = shipCanvas ? createFlyby(THREE, shipCanvas) : null;
+      // The fly-by gets a fresh canvas on every run, like the scenes' renderer.
+      // Its dispose() forces the context lost, and a canvas whose context was
+      // lost hands a new renderer that same dead context: reusing one fixed
+      // <canvas> made any rerun of this effect (every hot update in dev) throw
+      // in createFlyby and leave the scene layer blank.
+      const fxCanvas = fxRef.current;
+      const shipCanvas = document.createElement("canvas");
+      shipCanvas.className = "showcase-scenes__ship";
+      fxCanvas?.before(shipCanvas);
+      // The ship is decoration: if its renderer can't start (no WebGL context
+      // to be had), the scenes carry on without it instead of failing too.
+      let flyby: ReturnType<typeof createFlyby> | null = null;
+      try {
+        if (fxCanvas) flyby = createFlyby(THREE, shipCanvas);
+      } catch (error) {
+        console.warn("[showcase] fly-by unavailable", error);
+      }
       // When the next pass is due (loop time), set once a scene is showing.
       let nextFlybyAt = 0;
       // Development only: start a pass now, for checking it without waiting.
       if (import.meta.env.DEV) {
-        const helper = Object.assign(() => flyby?.launch(), { isFlying: () => flyby?.flying ?? false });
+        // __showcaseFlyby(true) makes the pass fire its lasers, (false) keeps it quiet.
+        const helper = Object.assign((lasers?: boolean) => flyby?.launch({ lasers }), {
+          isFlying: () => flyby?.flying ?? false,
+        });
         (window as unknown as { __showcaseFlyby?: typeof helper }).__showcaseFlyby = helper;
       }
 
@@ -805,6 +822,7 @@ export function SceneStage({ projects, techStack, highlights, portfolio, profile
         for (const scene of scenesRef.current.values()) scene.dispose();
         scenesRef.current.clear();
         flyby?.dispose();
+        shipCanvas.remove();
         if (import.meta.env.DEV) delete (window as unknown as { __showcaseFlyby?: () => void }).__showcaseFlyby;
         renderer.dispose();
         // Hand the GPU memory back now, not whenever the browser gets to it
@@ -871,8 +889,8 @@ export function SceneStage({ projects, techStack, highlights, portfolio, profile
         <div className="showcase-scenes__mood" />
         <div className="showcase-scenes__mood showcase-scenes__mood--lift" />
         <div className="showcase-scenes__shade" />
-        {/* The fly-by ship: outside the toned layer, so it keeps its own colors. */}
-        <canvas ref={shipCanvasRef} className="showcase-scenes__ship" />
+        {/* The fly-by ship's canvas is added here by the scenes effect, just
+            before the fx layer: outside the toned layer, so it keeps its own colors. */}
         <canvas ref={fxRef} className="showcase-scenes__fx" />
         <div ref={cutRef} className="showcase-scenes__cut" />
       </div>
