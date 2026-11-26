@@ -4,7 +4,7 @@ import type { TechStackTreeNode } from "@hd/content-schema/tech-stack-tree";
 import type { ShowcaseProject } from "../lib/useShowcaseProjects";
 import { SCENE_DEFINITIONS } from "../scenes/registry";
 import { PeekTitle } from "./PeekTitle";
-import { createFlyby } from "../lib/flyby";
+import { createFlyby, type PassKind } from "../lib/flyby";
 import { PEEK_TONES, PEEK_TRANSITIONS, runPeekEnding, runPeekTransition, shuffled, type CancelTransition } from "../lib/peekTransitions";
 import { trackEvent } from "../../../lib/analytics";
 import { EMPTY_PORTFOLIO, type SceneData, type SceneJob, type ScenePortfolio, type ShowcaseScene } from "../scenes/types";
@@ -246,6 +246,8 @@ export function SceneStage({ projects, techStack, highlights, portfolio, profile
   const focusRef = useRef(focusProjectId);
   const interactiveRef = useRef(interactive);
   const pausedRef = useRef(paused);
+  /** The fly-by's canvas, made by the scenes effect (a fresh one each run). */
+  const shipCanvasRef = useRef<HTMLCanvasElement | null>(null);
   // Set by the render effect; lets un-pausing start the loop it stopped.
   const resumeRef = useRef<(() => void) | null>(null);
   const onShowingRef = useRef(onShowing);
@@ -263,6 +265,9 @@ export function SceneStage({ projects, techStack, highlights, portfolio, profile
   // Coming off a pause, the loop has stopped and has to be asked to start again.
   useEffect(() => {
     if (!paused) resumeRef.current?.();
+    // A paused loop leaves its last frame on the canvas: hide the ship so it
+    // can't sit frozen over the text (it is outside the scene layer's fade).
+    shipCanvasRef.current?.classList.toggle("is-paused", paused);
   }, [paused]);
 
   const hasData = projects.length > 0 && techStack !== undefined && portfolio !== undefined;
@@ -396,15 +401,23 @@ export function SceneStage({ projects, techStack, highlights, portfolio, profile
       // lost hands a new renderer that same dead context: reusing one fixed
       // <canvas> made any rerun of this effect (every hot update in dev) throw
       // in createFlyby and leave the scene layer blank.
-      const fxCanvas = fxRef.current;
+      //
+      // It sits outside the scene layer, as its next sibling: inside it, the
+      // ship could never rise above the page's text. At z-index 0 after the
+      // layer it draws over the scenes and under the text; when the ship comes
+      // close it is raised over the text (is-front), then lowered again.
+      const sceneLayer = fxRef.current?.closest(".showcase-scenes") ?? null;
       const shipCanvas = document.createElement("canvas");
-      shipCanvas.className = "showcase-scenes__ship";
-      fxCanvas?.before(shipCanvas);
+      shipCanvas.className = "showcase-flyby";
+      shipCanvas.setAttribute("aria-hidden", "true");
+      shipCanvas.classList.toggle("is-paused", pausedRef.current);
+      sceneLayer?.after(shipCanvas);
+      shipCanvasRef.current = shipCanvas;
       // The ship is decoration: if its renderer can't start (no WebGL context
       // to be had), the scenes carry on without it instead of failing too.
       let flyby: ReturnType<typeof createFlyby> | null = null;
       try {
-        if (fxCanvas) flyby = createFlyby(THREE, shipCanvas);
+        if (sceneLayer) flyby = createFlyby(THREE, shipCanvas);
       } catch (error) {
         console.warn("[showcase] fly-by unavailable", error);
       }
@@ -412,8 +425,9 @@ export function SceneStage({ projects, techStack, highlights, portfolio, profile
       let nextFlybyAt = 0;
       // Development only: start a pass now, for checking it without waiting.
       if (import.meta.env.DEV) {
-        // __showcaseFlyby(true) makes the pass fire its lasers, (false) keeps it quiet.
-        const helper = Object.assign((lasers?: boolean) => flyby?.launch({ lasers }), {
+        // __showcaseFlyby(true) makes the pass fire its lasers, (false) keeps it
+        // quiet; a second argument picks the pass, e.g. "overShoulder".
+        const helper = Object.assign((lasers?: boolean, kind?: PassKind) => flyby?.launch({ lasers, kind }), {
           isFlying: () => flyby?.flying ?? false,
         });
         (window as unknown as { __showcaseFlyby?: typeof helper }).__showcaseFlyby = helper;
@@ -786,6 +800,7 @@ export function SceneStage({ projects, techStack, highlights, portfolio, profile
           // in slow motion), without letting one frame jump it far.
           flyby?.update(Math.min(0.25, frameMs / 1000));
           flyby?.render();
+          if (flyby) shipCanvas.classList.toggle("is-front", flyby.inFront);
         }
         frame = requestAnimationFrame(render);
       };
@@ -823,6 +838,7 @@ export function SceneStage({ projects, techStack, highlights, portfolio, profile
         scenesRef.current.clear();
         flyby?.dispose();
         shipCanvas.remove();
+        if (shipCanvasRef.current === shipCanvas) shipCanvasRef.current = null;
         if (import.meta.env.DEV) delete (window as unknown as { __showcaseFlyby?: () => void }).__showcaseFlyby;
         renderer.dispose();
         // Hand the GPU memory back now, not whenever the browser gets to it
@@ -889,8 +905,8 @@ export function SceneStage({ projects, techStack, highlights, portfolio, profile
         <div className="showcase-scenes__mood" />
         <div className="showcase-scenes__mood showcase-scenes__mood--lift" />
         <div className="showcase-scenes__shade" />
-        {/* The fly-by ship's canvas is added here by the scenes effect, just
-            before the fx layer: outside the toned layer, so it keeps its own colors. */}
+        {/* The fly-by ship's canvas is added by the scenes effect just after
+            this layer (not inside it), so it can rise above the page's text. */}
         <canvas ref={fxRef} className="showcase-scenes__fx" />
         <div ref={cutRef} className="showcase-scenes__cut" />
       </div>
