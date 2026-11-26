@@ -3,6 +3,7 @@ import { Link, useNavigate, useParams } from "react-router-dom";
 import { ProjectGallery } from "../components/ProjectGallery";
 import { ProjectLinks } from "../components/ProjectLinks";
 import { useBackdropTint } from "../lib/backdropTint";
+import { cleanCommentHtml } from "../lib/commentHtml";
 import { readIndexReturnState } from "../lib/indexReturnState";
 import { useShowcaseProjects } from "../lib/useShowcaseProjects";
 import { markProjectVisited } from "../lib/visitedProjects";
@@ -146,6 +147,7 @@ export function ShowcaseProjectPage() {
               key: item.id ?? `${project.id}-${mediaIndex}`,
               src: item.image!,
               title: item.title && item.title !== project.title ? item.title : `${project.title}, view ${mediaIndex + 1}`,
+              commentHtml: cleanCommentHtml(item.comment),
             }))}
           />
         ) : null}

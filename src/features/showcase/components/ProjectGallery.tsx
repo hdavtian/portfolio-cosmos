@@ -6,13 +6,16 @@ export interface GalleryShot {
   key: string;
   src: string;
   title: string;
+  /** Commentary on the image (HD-14), already cleaned; "" for none. */
+  commentHtml: string;
 }
 
 /**
  * A project's screenshots as framed tiles: cropped to one shape, toned down
  * into the page's mood until hovered, revealed as they scroll in (a CSS take
- * on the Career Gallery's hologram reveal), each with a button to view it
- * full size.
+ * on the Career Gallery's hologram reveal). The whole image opens it full
+ * size. A comment, when there is one, sits beside the image (below it on a
+ * narrow column) and is cut short with … here; the viewer shows all of it.
  */
 export function ProjectGallery({
   shots,
@@ -128,10 +131,15 @@ function ShotTile({
   return (
     <li
       ref={ref}
-      className={`showcase-shot ${reveal.className}${revealed && loaded ? " is-revealed" : ""}`}
+      className={`showcase-shot ${reveal.className}${shot.commentHtml ? " has-comment" : ""}${revealed && loaded ? " is-revealed" : ""}`}
       style={{ "--shot-delay": `${reveal.delay}ms`, "--shot-duration": `${reveal.duration}ms` } as React.CSSProperties}
     >
-      <div className="showcase-shot__frame">
+      <button
+        type="button"
+        className="showcase-shot__frame"
+        onClick={onMaximize}
+        aria-label={`View ${shot.title} full size`}
+      >
         <img
           ref={imageRef}
           src={shot.src}
@@ -143,16 +151,16 @@ function ShotTile({
         />
         <span className="showcase-shot__veil" aria-hidden="true" />
         <span className="showcase-shot__front" aria-hidden="true" />
-        <button type="button" className="showcase-shot__maximize" onClick={onMaximize} aria-label={`View ${shot.title} full size`}>
-          <span aria-hidden="true" />
-        </button>
-      </div>
+      </button>
       <p className="showcase-shot__caption">
         <span className="showcase-shot__index">
           {pad(index + 1)} / {pad(total)}
         </span>
         <span>{shot.title}</span>
       </p>
+      {shot.commentHtml ? (
+        <div className="showcase-shot__comment" dangerouslySetInnerHTML={{ __html: shot.commentHtml }} />
+      ) : null}
     </li>
   );
 }
@@ -173,8 +181,22 @@ function ShotViewer({
   onClose: () => void;
 }) {
   const closeRef = useRef<HTMLButtonElement>(null);
+  const imageRef = useRef<HTMLImageElement>(null);
+  const commentRef = useRef<HTMLDivElement>(null);
   const currentThumbRef = useRef<HTMLButtonElement>(null);
   const shot = shots[index];
+
+  // The comment box is never taller than the image beside it; past that it scrolls.
+  useEffect(() => {
+    const image = imageRef.current;
+    const comment = commentRef.current;
+    if (!image || !comment) return;
+    const fit = () => comment.style.setProperty("--viewer-shot-height", `${image.offsetHeight}px`);
+    const observer = new ResizeObserver(fit);
+    observer.observe(image);
+    comment.scrollTop = 0;
+    return () => observer.disconnect();
+  }, [index, shot.commentHtml]);
 
   // Keep the current thumbnail in view in the strip.
   useEffect(() => {
@@ -256,9 +278,20 @@ function ShotViewer({
         </button>
       </div>
 
-      <div className="showcase-viewer__stage">
+      <div className={`showcase-viewer__stage${shot.commentHtml ? " has-comment" : ""}`}>
         {/* The whole screenshot, scaled to fit the screen. */}
-        <img key={shot.key} src={shot.src} alt={shot.title} />
+        <img ref={imageRef} key={shot.key} src={shot.src} alt={shot.title} />
+        {shot.commentHtml ? (
+          <div
+            ref={commentRef}
+            key={`${shot.key}-comment`}
+            className="showcase-viewer__comment"
+            role="region"
+            tabIndex={0}
+            aria-label="Comment on this screenshot"
+            dangerouslySetInnerHTML={{ __html: shot.commentHtml }}
+          />
+        ) : null}
         {shots.length > 1 ? (
           <>
             <button

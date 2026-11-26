@@ -93,18 +93,27 @@ describe("withSchemaDefaults", () => {
 
   it("does not report a field added after the release was published as a change", () => {
     const live = side({ portfolioEntries: [entry] });
-    // Drafts are read through the schema, which adds the empty list.
-    const draft = side({ portfolioEntries: [{ ...entry, links: [] }] });
-    expect(summarizeChanges(live, draft)).toEqual(['Updated project "Hydrodent" (links)']);
+    // Drafts are read through the schema, which adds the empty fields
+    // (links, HD-13; image comments, HD-14).
+    const draft = side({ portfolioEntries: [{ ...entry, links: [], coverComment: "" }] });
+    expect(summarizeChanges(live, draft)).toEqual(['Updated project "Hydrodent" (links, image comment)']);
     expect(summarizeChanges(withSchemaDefaults(live), draft)).toEqual([]);
   });
 
   it("still reports real link changes", () => {
     const live = withSchemaDefaults(side({ portfolioEntries: [entry] }));
     const draft = side({
-      portfolioEntries: [{ ...entry, links: [{ url: "https://example.com/", label: "Live site", description: "" }] }],
+      portfolioEntries: [
+        { ...entry, coverComment: "", links: [{ url: "https://example.com/", label: "Live site", description: "" }] },
+      ],
     });
     expect(summarizeChanges(live, draft)).toEqual(['Updated project "Hydrodent" (links)']);
+  });
+
+  it("reports a new image comment", () => {
+    const live = withSchemaDefaults(side({ portfolioEntries: [entry] }));
+    const draft = side({ portfolioEntries: [{ ...entry, links: [], coverComment: "<p>Built with Next.js</p>" }] });
+    expect(summarizeChanges(live, draft)).toEqual(['Updated project "Hydrodent" (image comment)']);
   });
 
   it("keeps a record that no longer validates as stored", () => {

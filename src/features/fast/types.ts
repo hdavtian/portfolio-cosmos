@@ -5,6 +5,8 @@ export interface PortfolioMedia {
   title?: string;
   description?: string;
   fit?: string;
+  /** Commentary on this image as HTML (HD-14); "" or missing for none. */
+  comment?: string;
 }
 
 export interface PortfolioEntrySeed {

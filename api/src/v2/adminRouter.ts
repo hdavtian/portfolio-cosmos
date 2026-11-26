@@ -10,6 +10,7 @@ import { Router } from "express";
 import { z } from "zod";
 import { createRequireAuth } from "../auth/requireAuth.js";
 import { getDb } from "./db.js";
+import { sanitizeImageComments } from "./imageComments.js";
 import { EntityRepository } from "./entityRepository.js";
 import { ApiError, asyncHandler, parseOrThrow } from "./http.js";
 import { createAdminContactRouter } from "./contact/adminContactRouter.js";
@@ -144,6 +145,8 @@ export function createAdminRouter({ cookieSecret }: { cookieSecret: string }): R
   for (const name of Object.keys(collectionSchemas) as CollectionName[]) {
     const schema = collectionSchemas[name];
     const base = `/${name}`;
+    // Image comments are rich text (HD-14), cleaned to a short list of tags.
+    const clean = <T>(content: T): T => (name === "portfolioEntries" ? sanitizeImageComments(content) : content);
 
     router.get(
       base,
@@ -156,7 +159,7 @@ export function createAdminRouter({ cookieSecret }: { cookieSecret: string }): R
     router.post(
       base,
       asyncHandler(async (req, res) => {
-        const content = parseOrThrow(schema, req.body);
+        const content = clean(parseOrThrow(schema, req.body));
         const created = await repositoryFor(name).create(content, editorOf(req));
         res.status(201).json(created);
       }),
@@ -190,7 +193,7 @@ export function createAdminRouter({ cookieSecret }: { cookieSecret: string }): R
           { version: (req.body as { version?: unknown } | undefined)?.version },
           "A version is required to update a record",
         );
-        const content = parseOrThrow(schema, req.body);
+        const content = clean(parseOrThrow(schema, req.body));
         const updated = await repositoryFor(name).update(
           param(req.params.slug),
           content,
