@@ -1093,11 +1093,15 @@ html.is-scene-dragging * {
   line-height: 0.86;
   letter-spacing: -0.005em;
   text-transform: uppercase;
-  /* One line each, cut well before the column edge. */
+  /* One line each, cut well before the column edge. A plain 22ch (not
+     min(100%, 22ch)): a percentage cap is ignored when the fit-content link
+     around it is sized, so the link took the full uncut width and the hover
+     image landed after the hidden letters. The link's own max-width: 100%
+     still cuts it on a narrow column. */
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  max-width: min(100%, 22ch);
+  max-width: 22ch;
   transition: color 220ms ease, transform 260ms ease;
 }
 
