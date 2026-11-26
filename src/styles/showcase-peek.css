@@ -15,14 +15,28 @@
   will-change: transform;
 }
 
-/* The fly-by ship's own transparent canvas: above the toned scene, the mood
-   tint and the shade, so the ship keeps its own colors; under the overlay. */
-.showcase-scenes__ship {
-  position: absolute;
+/* The fly-by ship's own transparent canvas, the scene layer's next sibling:
+   over the whole scene layer (toned scene, mood tint, shade, transitions), so
+   the ship keeps its own colors. At z-index 0, after the layer, it is under
+   the page's text (z-index 1); close up it rises over the text but stays
+   under the side panel and pills (5-6) and the lightbox (80). */
+.showcase-flyby {
+  position: fixed;
   inset: 0;
   width: 100%;
   height: 100%;
+  z-index: 0;
   pointer-events: none;
+}
+
+.showcase-flyby.is-front {
+  z-index: 2;
+}
+
+/* It follows the scene layer: hidden when the scenes are, and while paused. */
+.showcase-scenes:not(.is-showing) + .showcase-flyby,
+.showcase-flyby.is-paused {
+  visibility: hidden;
 }
 
 /* The overlay the peek transitions draw on (lines, sparks, snow, bars). */

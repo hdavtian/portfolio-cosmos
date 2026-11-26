@@ -26,9 +26,15 @@ export interface Flyby {
    * Starts a pass now, unless one is already flying or the ship isn't ready.
    * `lasers` forces the pass to fire (true) or not (false); left out, it's by chance.
    */
-  launch(options?: { lasers?: boolean }): void;
+  launch(options?: { lasers?: boolean; kind?: PassKind }): void;
   /** Whether a pass is on screen. */
   readonly flying: boolean;
+  /**
+   * Whether the ship is close enough to draw in front of the page's text
+   * (its canvas is raised over the content then, and lowered under it again
+   * as the ship pulls away), so it seems to fly over the text and then behind it.
+   */
+  readonly inFront: boolean;
   update(dt: number): void;
   /** Draws the ship on its canvas (and clears it once a pass is over). */
   render(): void;
@@ -212,7 +218,7 @@ const turn = (rate: number, from: number, to: number) => (t: number) =>
   rate * smooth(from, from + 0.7, t) * (1 - smooth(to, to + 0.7, t));
 const none = () => 0;
 
-type PassKind = "flyover" | "overShoulder" | "passBy" | "bankAway" | "climbOut";
+export type PassKind = "flyover" | "overShoulder" | "passBy" | "bankAway" | "climbOut";
 const PASSES: PassKind[] = ["flyover", "overShoulder", "passBy", "bankAway", "climbOut"];
 
 function makePass(THREE: ThreeModule, kind: PassKind): Pass {
@@ -295,6 +301,16 @@ const BOLT_LIFE_S = 1.3;
 const BOLT_SPREAD = 0.012;
 const MUZZLE_FLASH_S = 0.07;
 const BOLT_POOL = 16;
+
+/*
+ * In front of the text or behind it, by distance from the camera: nearer
+ * than FRONT_ENTER it comes over the text, past FRONT_LEAVE it goes behind.
+ * The gap between them keeps it from flipping back and forth at the edge.
+ * The over-the-shoulder and close pass-by passes cross it; the far passes
+ * (60-100 units out) stay behind the text.
+ */
+const FRONT_ENTER = 42;
+const FRONT_LEAVE = 52;
 
 /** A pass ends once the ship has been seen and has left the view (or after this long). */
 const PASS_MAX_SECONDS = 8;
@@ -458,6 +474,7 @@ export function createFlyby(THREE: ThreeModule, canvas: HTMLCanvasElement): Flyb
   };
 
   let pass: Pass | null = null;
+  let inFront = false;
   let elapsed = 0;
   let seen = false;
   let bank = 0;
@@ -470,6 +487,9 @@ export function createFlyby(THREE: ThreeModule, canvas: HTMLCanvasElement): Flyb
   return {
     get flying() {
       return pass !== null;
+    },
+    get inFront() {
+      return inFront;
     },
     preload() {
       if (loading || ready) return;
@@ -487,7 +507,8 @@ export function createFlyby(THREE: ThreeModule, canvas: HTMLCanvasElement): Flyb
     },
     launch(options) {
       if (pass || !ready) return;
-      pass = makePass(THREE, PASSES[Math.floor(Math.random() * PASSES.length)]);
+      pass = makePass(THREE, options?.kind ?? PASSES[Math.floor(Math.random() * PASSES.length)]);
+      inFront = pass.position.length() < FRONT_ENTER;
       bursts = [];
       if (options?.lasers ?? Math.random() < LASER_CHANCE) {
         bursts.push(rand(FIRST_BURST_DELAY_S[0], FIRST_BURST_DELAY_S[1]));
@@ -530,9 +551,13 @@ export function createFlyby(THREE: ThreeModule, canvas: HTMLCanvasElement): Flyb
       if ((seen && !inView) || elapsed > PASS_MAX_SECONDS) {
         pass = null;
         bursts = [];
+        // Back under the text for the bolts still in the air and the next pass.
+        inFront = false;
         hideAll();
         return;
       }
+      const distance = pass.position.length();
+      if (inFront ? distance > FRONT_LEAVE : distance < FRONT_ENTER) inFront = !inFront;
       // Fire only while the ship is on screen, so the shots are seen leaving it.
       if (inView && bursts.length > 0 && elapsed - seenAt >= bursts[0]) {
         bursts.shift();
