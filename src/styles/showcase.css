@@ -1965,10 +1965,104 @@ html.is-scene-dragging * {
   outline-offset: 4px;
 }
 
+.showcase-project__link-row {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+/* A small right-pointing arrow in the project's color, drawn like the Back arrow. */
 .showcase-project__link-arrow {
-  margin-left: 6px;
-  text-decoration: none;
-  display: inline-block;
+  position: relative;
+  flex: none;
+  width: 12px;
+  height: 1px;
+  background: var(--link-accent, var(--showcase-ink));
+}
+
+.showcase-project__link-arrow::after {
+  content: "";
+  position: absolute;
+  right: 0;
+  top: -3px;
+  width: 6px;
+  height: 6px;
+  border-right: 1px solid var(--link-accent, var(--showcase-ink));
+  border-top: 1px solid var(--link-accent, var(--showcase-ink));
+  transform: rotate(45deg);
+}
+
+/* The "opens a new tab" note, beside the link. */
+.showcase-link-note {
+  /* Placed from the link's position by ProjectLinks. */
+  position: fixed;
+  z-index: 40;
+  width: max-content;
+  max-width: min(260px, 70vw);
+  padding: 12px 34px 12px 12px;
+  font-family: var(--showcase-mono);
+  font-size: 11px;
+  line-height: 1.5;
+  color: var(--showcase-ink);
+  background: rgba(12, 14, 18, 0.92);
+  border: 1px solid var(--link-accent, rgba(244, 241, 236, 0.4));
+}
+
+.showcase-link-note p {
+  margin: 0 0 10px;
+  max-width: none;
+  font-size: 11px;
+  color: var(--showcase-ink);
+}
+
+.showcase-link-note strong {
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+.showcase-link-note__close {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  font: inherit;
+  font-size: 16px;
+  line-height: 1;
+  color: var(--showcase-ink-quiet);
+  background: none;
+  border: 0;
+  cursor: pointer;
+}
+
+.showcase-link-note__continue {
+  padding: 6px 12px;
+  font-family: var(--showcase-mono);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: #15161a;
+  background: var(--link-accent, var(--showcase-ink));
+  border: 1px solid var(--link-accent, var(--showcase-ink));
+  cursor: pointer;
+}
+
+.showcase-link-note__close:hover,
+.showcase-link-note__close:focus-visible {
+  color: var(--showcase-ink);
+}
+
+.showcase-link-note__continue:hover {
+  filter: brightness(1.12);
+}
+
+.showcase-link-note__close:focus-visible,
+.showcase-link-note__continue:focus-visible {
+  outline: 2px solid var(--showcase-ink);
+  outline-offset: 2px;
 }
 
 .showcase-project__links p {
