@@ -68,6 +68,7 @@ const FIELD_NAMES: Record<string, string> = {
   galleryMedia: "gallery",
   clientVariants: "client sites",
   links: "links",
+  coverComment: "image comment",
   mediaId: "image",
   coreSlug: "core",
   categorySlug: "category",

@@ -8,6 +8,8 @@ const FIELD_LABELS: Record<string, string> = {
   galleryMedia: "Gallery image",
   clientVariants: "Client site",
   links: "Link",
+  comment: "Comment",
+  coverComment: "Image comment",
   url: "URL",
   positions: "Position",
   projects: "Project",

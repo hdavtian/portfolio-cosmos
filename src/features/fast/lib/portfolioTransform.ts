@@ -53,6 +53,8 @@ const gallery = (release: Release, media: GalleryItem[]): PortfolioMedia[] =>
     title: item.title,
     description: item.description,
     fit: item.fit,
+    // A release published before HD-14 has no comments.
+    comment: item.comment ?? "",
   }));
 
 function entryItem(
@@ -72,7 +74,7 @@ function entryItem(
     year: entry.year,
     category,
     subcategory: "General",
-    detailMedia: withCover(entry.slug, entry.title, entry.description, image, gallery(release, entry.galleryMedia)),
+    detailMedia: withCover(entry.slug, entry.title, entry.description, image, entry.coverComment ?? "", gallery(release, entry.galleryMedia)),
     isClientVariation: false,
     // A release published before HD-13 has no links.
     links: links(entry.links),
@@ -88,6 +90,8 @@ function variantItem(
 ): PortfolioItem {
   const image = mediaUrl(release, variant.mediaId) || mediaUrl(release, parent.mediaId);
   const media = variant.galleryMedia.length > 0 ? variant.galleryMedia : parent.galleryMedia;
+  // A borrowed image brings its comment with it.
+  const coverComment = (mediaUrl(release, variant.mediaId) ? variant.coverComment : parent.coverComment) ?? "";
   return {
     id: variant.slug,
     title: variant.title,
@@ -101,7 +105,7 @@ function variantItem(
     year: typeof variant.year === "number" ? variant.year : parent.year,
     category,
     subcategory: parent.title,
-    detailMedia: withCover(variant.slug, variant.title, variant.description, image, gallery(release, media)),
+    detailMedia: withCover(variant.slug, variant.title, variant.description, image, coverComment, gallery(release, media)),
     isClientVariation: true,
     links: links(variant.links),
   };
@@ -113,8 +117,9 @@ function withCover(
   title: string,
   description: string,
   cover: string,
+  comment: string,
   media: PortfolioMedia[],
 ): PortfolioMedia[] {
   if (!cover || media.some((entry) => entry.image === cover)) return media;
-  return [{ id: `${itemId}-cover`, type: "image", image: cover, title, description }, ...media];
+  return [{ id: `${itemId}-cover`, type: "image", image: cover, title, description, comment }, ...media];
 }

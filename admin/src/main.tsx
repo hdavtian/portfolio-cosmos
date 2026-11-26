@@ -13,6 +13,9 @@ import "@syncfusion/ej2-calendars/styles/material.css";
 import "@syncfusion/ej2-grids/styles/material.css";
 import "@syncfusion/ej2-treegrid/styles/material.css";
 import "@syncfusion/ej2-notifications/styles/material.css";
+// Image comments (HD-14).
+import "@syncfusion/ej2-splitbuttons/styles/material.css";
+import "@syncfusion/ej2-richtexteditor/styles/material.css";
 import "./styles.css";
 
 // No StrictMode here, deliberately: its development-only mount → unmount →

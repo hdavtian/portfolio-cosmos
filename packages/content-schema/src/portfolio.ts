@@ -3,6 +3,13 @@ import { hexColorSchema, httpUrlSchema, mediaRefSchema, slugSchema, sortOrderSch
 
 const text = (max = 500) => z.string().trim().min(1).max(max);
 
+/**
+ * Commentary on one image (HD-14): rich text as HTML from the admin's editor,
+ * "" for none. The API cleans it to a short list of tags on save and the site
+ * cleans it again before showing it.
+ */
+export const imageCommentSchema = z.string().trim().max(10_000).default("");
+
 export const imageFitSchema = z.enum(["cover", "contain"]);
 
 export const galleryItemSchema = z.object({
@@ -12,6 +19,7 @@ export const galleryItemSchema = z.object({
   title: text(200),
   description: text(2000),
   fit: imageFitSchema,
+  comment: imageCommentSchema,
 });
 
 const yearSchema = z.number().int().min(1990).max(2100).nullable();
@@ -31,6 +39,8 @@ export const clientVariantSchema = z.object({
   slug: slugSchema,
   title: text(200),
   mediaId: mediaRefSchema,
+  /** Commentary on the client site's own image (HD-14). */
+  coverComment: imageCommentSchema,
   description: text(4000),
   /** Links into the master list. A client site is tagged on its own (D32). */
   technologySlugs: z.array(slugSchema).default([]),
@@ -69,6 +79,8 @@ export const portfolioEntrySchema = z.object({
   }),
   title: text(200),
   mediaId: mediaRefSchema,
+  /** Commentary on the project's own image (HD-14). */
+  coverComment: imageCommentSchema,
   description: text(4000),
   /**
    * Links into the master technology list (plan 4.5); a site renders the

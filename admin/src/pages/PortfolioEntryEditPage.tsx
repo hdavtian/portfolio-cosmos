@@ -5,6 +5,7 @@ import { NumericTextBoxComponent, TextBoxComponent } from "@syncfusion/ej2-react
 import { useQuery } from "@tanstack/react-query";
 import { useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
+import { CommentEditor } from "../components/CommentEditor";
 import { FormField } from "../components/FormField";
 import { ListEditor } from "../components/ListEditor";
 import { MediaPicker } from "../components/MediaPicker";
@@ -25,6 +26,10 @@ import {
 
 const ENTITY = "portfolioEntries";
 
+/** HD-14: where image comments show on the main site. */
+const COMMENT_HINT =
+  "Optional. Main site only: beside this image on the project page (cut short if long) and in full in the enlarged view.";
+
 const FIT_OPTIONS = [
   { value: "cover", text: "Cover (fill and crop)" },
   { value: "contain", text: "Contain (show whole image)" },
@@ -37,6 +42,7 @@ const EMPTY: PortfolioEntry = {
   placement: { plane: 0, ring: 0 },
   title: "",
   mediaId: "",
+  coverComment: "",
   description: "",
   technologySlugs: [],
   year: null,
@@ -223,7 +229,7 @@ function EntryEditor({ initial, initialVersion, updatedBy, isNew }: EditorProps)
       description="Three.js app: when the card opens, the cover image is the large photo, and the cover plus these images appear as thumbnails beneath it (6 per row, arrows for more). Don't repeat the cover image here or it appears twice. HTML portfolio: every image appears in the detail view."
       items={items}
       onChange={onChange}
-      createItem={() => ({ slug: "", type: "image", mediaId: "", title: "", description: "", fit: "cover" })}
+      createItem={() => ({ slug: "", type: "image", mediaId: "", title: "", description: "", fit: "cover", comment: "" })}
       describeItem={(item, index) => item.title || `Image ${index + 1}`}
       addLabel="Add image"
       errors={sectionErrors(prefix)}
@@ -253,6 +259,9 @@ function EntryEditor({ initial, initialVersion, updatedBy, isNew }: EditorProps)
               value={item.fit}
               change={(e: { value: string }) => updateItem({ ...item, fit: e.value as GalleryItem["fit"] })}
             />
+          </FormField>
+          <FormField label="Comment" hint={COMMENT_HINT} error={itemError(prefix, index, "comment")}>
+            <CommentEditor value={item.comment ?? ""} onChange={(comment) => updateItem({ ...item, comment })} />
           </FormField>
         </>
       )}
@@ -338,6 +347,9 @@ function EntryEditor({ initial, initialVersion, updatedBy, isNew }: EditorProps)
         </FormField>
         <FormField label="Image" error={fieldErrors.mediaId}>
           <MediaPicker value={draft.mediaId} onChange={(mediaId) => set("mediaId", mediaId)} />
+        </FormField>
+        <FormField label="Image comment" hint={COMMENT_HINT} error={fieldErrors.coverComment}>
+          <CommentEditor value={draft.coverComment ?? ""} onChange={(html) => set("coverComment", html)} />
         </FormField>
         <FormField label="Image fit" error={fieldErrors.fit}>
           <DropDownListComponent
@@ -444,6 +456,7 @@ function EntryEditor({ initial, initialVersion, updatedBy, isNew }: EditorProps)
           slug: "",
           title: "",
           mediaId: "",
+          coverComment: "",
           description: "",
           technologySlugs: [],
           year: null,
@@ -464,6 +477,12 @@ function EntryEditor({ initial, initialVersion, updatedBy, isNew }: EditorProps)
             </FormField>
             <FormField label="Image" error={itemError("clientVariants", index, "mediaId")}>
               <MediaPicker value={item.mediaId} onChange={(mediaId) => updateItem({ ...item, mediaId })} />
+            </FormField>
+            <FormField label="Image comment" hint={COMMENT_HINT} error={itemError("clientVariants", index, "coverComment")}>
+              <CommentEditor
+                value={item.coverComment ?? ""}
+                onChange={(coverComment) => updateItem({ ...item, coverComment })}
+              />
             </FormField>
             <FormField label="Description" error={itemError("clientVariants", index, "description")}>
               <TextBoxComponent
