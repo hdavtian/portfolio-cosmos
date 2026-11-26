@@ -1,6 +1,7 @@
 import { useEffect } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { ProjectGallery } from "../components/ProjectGallery";
+import { ProjectLinks } from "../components/ProjectLinks";
 import { useBackdropTint } from "../lib/backdropTint";
 import { readIndexReturnState } from "../lib/indexReturnState";
 import { useShowcaseProjects } from "../lib/useShowcaseProjects";
@@ -81,19 +82,7 @@ export function ShowcaseProjectPage() {
           Back
         </Link>
         <h1 className="showcase-project__title">{project.title}</h1>
-        {project.links.length ? (
-          <ul className="showcase-project__links">
-            {project.links.map((link, index) => (
-              <li key={`${link.url}-${index}`}>
-                <a href={link.url} target="_blank" rel="noopener noreferrer" aria-label={`${link.label} (opens in a new tab)`}>
-                  {link.label}
-                  <span className="showcase-project__link-arrow" aria-hidden="true">↗</span>
-                </a>
-                {link.description ? <p>{link.description}</p> : null}
-              </li>
-            ))}
-          </ul>
-        ) : null}
+        {project.links.length ? <ProjectLinks links={project.links} accent={project.coreColor} /> : null}
         {project.description ? <p className="showcase-project__lead">{project.description}</p> : null}
 
         <dl className="showcase-spec">
