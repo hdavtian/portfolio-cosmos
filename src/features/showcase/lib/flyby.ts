@@ -13,14 +13,20 @@ type ThreeModule = typeof import("three");
  * transparent canvas laid over the scene layer, so no scene had to change.
  * That canvas sits outside the toned layer: the ship keeps its own colors
  * and its blue engine whatever tone the scene is in. It only draws while a
- * pass is flying.
+ * pass is flying (or its last laser bolts are still in the air).
+ *
+ * Now and then a pass fires a burst or two of red laser bolts from the
+ * front of the ship, straight along its heading.
  */
 
 export interface Flyby {
   /** Starts loading the ship model (once); passes wait until it is in. */
   preload(): void;
-  /** Starts a pass now, unless one is already flying or the ship isn't ready. */
-  launch(): void;
+  /**
+   * Starts a pass now, unless one is already flying or the ship isn't ready.
+   * `lasers` forces the pass to fire (true) or not (false); left out, it's by chance.
+   */
+  launch(options?: { lasers?: boolean }): void;
   /** Whether a pass is on screen. */
   readonly flying: boolean;
   update(dt: number): void;
@@ -115,15 +121,18 @@ function buildShip(THREE: ThreeModule) {
 }
 
 /** A soft round glow, drawn once on a canvas (a sprite without a texture is a square). */
-function glowTexture(THREE: ThreeModule) {
+function glowTexture(
+  THREE: ThreeModule,
+  stops: [string, string, string] = ["rgba(220, 245, 255, 1)", "rgba(120, 210, 255, 0.55)", "rgba(60, 160, 255, 0)"],
+) {
   const canvas = document.createElement("canvas");
   canvas.width = canvas.height = 128;
   const context = canvas.getContext("2d");
   if (context) {
     const gradient = context.createRadialGradient(64, 64, 0, 64, 64, 64);
-    gradient.addColorStop(0, "rgba(220, 245, 255, 1)");
-    gradient.addColorStop(0.3, "rgba(120, 210, 255, 0.55)");
-    gradient.addColorStop(1, "rgba(60, 160, 255, 0)");
+    gradient.addColorStop(0, stops[0]);
+    gradient.addColorStop(0.3, stops[1]);
+    gradient.addColorStop(1, stops[2]);
     context.fillStyle = gradient;
     context.fillRect(0, 0, 128, 128);
   }
@@ -167,7 +176,7 @@ async function loadShipModel(THREE: ThreeModule) {
   ship.add(model);
   box.setFromObject(ship);
   // The model's nose is +Z, so the engines are at the back, -Z.
-  return { ship, engines, rearZ: box.min.z };
+  return { ship, engines, rearZ: box.min.z, frontZ: box.max.z, halfWidth: box.max.x };
 }
 
 /*
@@ -262,6 +271,31 @@ function makePass(THREE: ThreeModule, kind: PassKind): Pass {
   }
 }
 
+/*
+ * Lasers. A pass fires by chance; when it does, one burst comes a moment after
+ * the ship is on screen and sometimes a second follows. A burst is a few bolts
+ * from alternating muzzles at the front, slightly staggered, flying straight
+ * on along the heading much faster than the ship. There's no bloom on this
+ * canvas, so each bolt is a hot core inside a wider, fainter red sheath.
+ */
+const LASER_CHANCE = 0.5;
+const SECOND_BURST_CHANCE = 0.4;
+/** Seconds after the ship comes into view that the first burst fires. */
+const FIRST_BURST_DELAY_S: [number, number] = [0.3, 1.4];
+const SECOND_BURST_GAP_S: [number, number] = [0.6, 1.2];
+const BURST_BOLTS: [number, number] = [3, 5];
+const BOLT_STAGGER_S = 0.085;
+/** Units per second; the ship cruises at 46-68. */
+const BOLT_SPEED = 260;
+const BOLT_LENGTH = 6;
+const BOLT_CORE = 0.09;
+const BOLT_SHEATH = 0.32;
+const BOLT_LIFE_S = 1.3;
+/** Bolts spread off the heading by up to this (radians). */
+const BOLT_SPREAD = 0.012;
+const MUZZLE_FLASH_S = 0.07;
+const BOLT_POOL = 16;
+
 /** A pass ends once the ship has been seen and has left the view (or after this long). */
 const PASS_MAX_SECONDS = 8;
 
@@ -292,6 +326,8 @@ export function createFlyby(THREE: ThreeModule, canvas: HTMLCanvasElement): Flyb
   let engines: Array<{ material: THREE.MeshStandardMaterial; base: number }> = [];
   let builtEngine: THREE.MeshBasicMaterial | null = null;
   let rearZ = -SHIP_SIZE / 2;
+  let frontZ = SHIP_SIZE / 2;
+  let halfWidth = SHIP_SIZE / 2;
   let ready = false;
   let loading = false;
   const useBuiltShip = () => {
@@ -302,6 +338,8 @@ export function createFlyby(THREE: ThreeModule, canvas: HTMLCanvasElement): Flyb
     body.add(ship);
     builtEngine = engineMaterial;
     rearZ = -3.1 * (SHIP_SIZE / 9.6);
+    frontZ = 4.75 * (SHIP_SIZE / 9.6);
+    halfWidth = 3.1 * (SHIP_SIZE / 9.6);
     ready = true;
   };
 
@@ -325,6 +363,100 @@ export function createFlyby(THREE: ThreeModule, canvas: HTMLCanvasElement): Flyb
   };
   hideAll();
 
+  // Laser bolts: a pool of core + sheath pairs sharing one box, and a muzzle flash.
+  const boltGeometry = new THREE.BoxGeometry(1, 1, 1);
+  const coreMaterial = new THREE.MeshBasicMaterial({
+    color: new THREE.Color(1, 0.86, 0.82),
+    transparent: true,
+    blending: THREE.AdditiveBlending,
+    depthWrite: false,
+    toneMapped: false,
+  });
+  const sheathMaterial = new THREE.MeshBasicMaterial({
+    color: new THREE.Color(1, 0.12, 0.08),
+    transparent: true,
+    opacity: 0.55,
+    blending: THREE.AdditiveBlending,
+    depthWrite: false,
+    toneMapped: false,
+  });
+  const bolts = Array.from({ length: BOLT_POOL }, () => {
+    const group = new THREE.Group();
+    const core = new THREE.Mesh(boltGeometry, coreMaterial);
+    core.scale.set(BOLT_CORE, BOLT_CORE, 1);
+    const sheath = new THREE.Mesh(boltGeometry, sheathMaterial);
+    sheath.scale.set(BOLT_SHEATH, BOLT_SHEATH, 1.08);
+    group.add(core, sheath);
+    group.visible = false;
+    scene.add(group);
+    return { group, from: new THREE.Vector3(), direction: new THREE.Vector3(), delay: 0, age: 0, active: false };
+  });
+  const redGlow = glowTexture(THREE, ["rgba(255, 235, 225, 1)", "rgba(255, 80, 60, 0.6)", "rgba(255, 30, 20, 0)"]);
+  const muzzleFlash = new THREE.Sprite(
+    new THREE.SpriteMaterial({ map: redGlow, transparent: true, blending: THREE.AdditiveBlending, depthWrite: false, toneMapped: false }),
+  );
+  muzzleFlash.visible = false;
+  scene.add(muzzleFlash);
+  let flashLeft = 0;
+  /** Bursts still to come this pass, as seconds after the ship came into view. */
+  let bursts: number[] = [];
+  let seenAt = -1;
+  let muzzleSide = 1;
+  const point = new THREE.Vector3();
+  const spreadAxis = new THREE.Vector3();
+  const boltsInFlight = () => bolts.some((bolt) => bolt.active);
+
+  const fireBurst = (current: Pass) => {
+    const count = Math.round(rand(BURST_BOLTS[0], BURST_BOLTS[1]));
+    for (let index = 0; index < count; index += 1) {
+      const bolt = bolts.find((candidate) => !candidate.active);
+      if (!bolt) return;
+      muzzleSide = -muzzleSide;
+      // From the front of the ship, either side of the nose. (The bolt starts
+      // a stagger later, by when the ship has moved on a little; at these
+      // speeds that gap is too small to see.)
+      bolt.from.set(muzzleSide * halfWidth * 0.28, 0, frontZ * 0.96).applyQuaternion(body.quaternion).add(current.position);
+      bolt.direction.copy(current.heading);
+      spreadAxis.set(Math.random() - 0.5, Math.random() - 0.5, Math.random() - 0.5).normalize();
+      bolt.direction.applyAxisAngle(spreadAxis, rand(0, BOLT_SPREAD)).normalize();
+      bolt.delay = index * BOLT_STAGGER_S;
+      bolt.age = 0;
+      bolt.active = true;
+      bolt.group.visible = false;
+    }
+  };
+
+  const updateBolts = (dt: number) => {
+    for (const bolt of bolts) {
+      if (!bolt.active) continue;
+      bolt.age += dt;
+      const flight = bolt.age - bolt.delay;
+      if (flight < 0) continue;
+      if (flight > BOLT_LIFE_S) {
+        bolt.active = false;
+        bolt.group.visible = false;
+        continue;
+      }
+      if (!bolt.group.visible) {
+        // Leaving the muzzle now: a brief flash there.
+        muzzleFlash.position.copy(bolt.from);
+        flashLeft = MUZZLE_FLASH_S;
+      }
+      // The tail stays at the muzzle until the bolt is full length, then it flies on.
+      const travelled = flight * BOLT_SPEED;
+      const length = Math.min(BOLT_LENGTH, travelled);
+      point.copy(bolt.from).addScaledVector(bolt.direction, travelled - length / 2);
+      bolt.group.position.copy(point);
+      point.add(bolt.direction);
+      bolt.group.lookAt(point);
+      bolt.group.scale.set(1, 1, Math.max(0.05, length));
+      bolt.group.visible = true;
+    }
+    flashLeft = Math.max(0, flashLeft - dt);
+    muzzleFlash.visible = flashLeft > 0;
+    if (muzzleFlash.visible) muzzleFlash.scale.setScalar(2.2 * (0.6 + flashLeft / MUZZLE_FLASH_S));
+  };
+
   let pass: Pass | null = null;
   let elapsed = 0;
   let seen = false;
@@ -347,13 +479,21 @@ export function createFlyby(THREE: ThreeModule, canvas: HTMLCanvasElement): Flyb
           body.add(loaded.ship);
           engines = loaded.engines;
           rearZ = loaded.rearZ;
+          frontZ = loaded.frontZ;
+          halfWidth = loaded.halfWidth;
           ready = true;
         })
         .catch(useBuiltShip);
     },
-    launch() {
+    launch(options) {
       if (pass || !ready) return;
       pass = makePass(THREE, PASSES[Math.floor(Math.random() * PASSES.length)]);
+      bursts = [];
+      if (options?.lasers ?? Math.random() < LASER_CHANCE) {
+        bursts.push(rand(FIRST_BURST_DELAY_S[0], FIRST_BURST_DELAY_S[1]));
+        if (Math.random() < SECOND_BURST_CHANCE) bursts.push(bursts[0] + rand(SECOND_BURST_GAP_S[0], SECOND_BURST_GAP_S[1]));
+      }
+      seenAt = -1;
       elapsed = 0;
       seen = false;
       bank = 0;
@@ -362,6 +502,8 @@ export function createFlyby(THREE: ThreeModule, canvas: HTMLCanvasElement): Flyb
       flare.visible = true;
     },
     update(dt: number) {
+      // Bolts fly on after the ship has gone.
+      updateBolts(dt);
       if (!pass) return;
       elapsed += dt;
       // Turn and pitch at the pass's rates, then fly on at cruise speed.
@@ -383,11 +525,18 @@ export function createFlyby(THREE: ThreeModule, canvas: HTMLCanvasElement): Flyb
       // Done once it has been on screen and has left it.
       projected.copy(pass.position).project(camera);
       const inView = projected.z < 1 && Math.abs(projected.x) < 1.15 && Math.abs(projected.y) < 1.15 && pass.position.z < 0;
+      if (inView && !seen) seenAt = elapsed;
       if (inView) seen = true;
       if ((seen && !inView) || elapsed > PASS_MAX_SECONDS) {
         pass = null;
+        bursts = [];
         hideAll();
         return;
+      }
+      // Fire only while the ship is on screen, so the shots are seen leaving it.
+      if (inView && bursts.length > 0 && elapsed - seenAt >= bursts[0]) {
+        bursts.shift();
+        fireBurst(pass);
       }
 
       // Engines: the grille brightens and flickers, a flare and trail behind.
@@ -406,7 +555,7 @@ export function createFlyby(THREE: ThreeModule, canvas: HTMLCanvasElement): Flyb
       });
     },
     render() {
-      if (!pass) {
+      if (!pass && !boltsInFlight() && flashLeft <= 0) {
         // Leave nothing behind after a pass; then stay idle.
         if (drawn) {
           renderer.clear();
@@ -430,6 +579,7 @@ export function createFlyby(THREE: ThreeModule, canvas: HTMLCanvasElement): Flyb
         else mesh.material?.dispose?.();
       });
       glow.dispose();
+      redGlow.dispose();
       renderer.dispose();
       renderer.forceContextLoss();
     },
