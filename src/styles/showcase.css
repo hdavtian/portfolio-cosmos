@@ -120,12 +120,13 @@
   display: block;
 }
 
+/* Never darker than 85%, so the scenes stay visible even in the night mood. */
 .showcase-scenes__canvas canvas {
-  filter: brightness(calc(0.62 + var(--mood-lift) * 0.5)) saturate(0.95);
+  filter: brightness(calc(0.85 + var(--mood-lift) * 0.25)) saturate(0.95);
 }
 
 /*
- * Mood: over a few minutes the scenes drift through colour and light, from
+ * Mood: over a few minutes the scenes drift through color and light, from
  * deep night through dusk and amber to a pale dawn and back.
  */
 @property --mood-color {
@@ -174,7 +175,11 @@
   opacity: calc(var(--mood-lift) * 0.32);
 }
 
-/* Keeps the big type legible over bright scenes. */
+/*
+ * Keeps the big type legible over bright scenes: dark on the left, where the
+ * project names sit, and light across the middle and right so the scenes
+ * show through there.
+ */
 .showcase-scenes__shade {
   position: absolute;
   inset: 0;
@@ -182,10 +187,10 @@
     linear-gradient(
       90deg,
       rgb(4 6 10 / calc(0.72 - var(--mood-lift) * 0.14)) 0%,
-      rgb(4 6 10 / calc(0.3 - var(--mood-lift) * 0.22)) 55%,
-      rgb(4 6 10 / calc(0.45 - var(--mood-lift) * 0.3)) 100%
+      rgb(4 6 10 / calc(0.16 - var(--mood-lift) * 0.12)) 55%,
+      rgb(4 6 10 / calc(0.14 - var(--mood-lift) * 0.1)) 100%
     ),
-    radial-gradient(ellipse at 60% 50%, transparent 30%, rgb(4 6 10 / calc(0.5 - var(--mood-lift) * 0.35)) 100%);
+    radial-gradient(ellipse at 60% 50%, transparent 30%, rgb(4 6 10 / calc(0.28 - var(--mood-lift) * 0.2)) 100%);
 }
 
 /* Empty space over a scene can be dragged to look around. */
@@ -774,33 +779,35 @@ html.is-scene-dragging * {
   transition: color 160ms ease;
 }
 
-/* A slanted gold plate behind the label (same gold as the page scrollbar);
-   the label itself stays upright. */
+/* A slanted gold plate behind the label, bright enough to stand out over the
+   dark scenes, with a faint glow; the label itself stays upright. */
 .showcase-pill::before {
   content: "";
   position: absolute;
   inset: 0;
   z-index: -1;
-  background: #d4af37;
-  border: 1px solid #d4af37;
+  background: #ffcc2e;
+  border: 1px solid #ffcc2e;
+  box-shadow: 0 0 12px rgb(255 204 46 / 0.35);
   transform: skewX(-16deg);
-  transition: background 160ms ease;
+  transition: background 160ms ease, box-shadow 160ms ease;
 }
 
 .showcase-pill:hover,
 .showcase-pill.active {
-  color: #f0d98d;
+  color: #ffe27a;
 }
 
 .showcase-pill:hover::before,
 .showcase-pill.active::before {
   background: transparent;
+  box-shadow: 0 0 8px rgb(255 204 46 / 0.25);
 }
 
 /* While the page a pill leads to is on its way, its plate fills with the same
    ribbed lines the hint panel uses, running slowly downward. It lives on the
    plate the pill already has, so nothing is added to the row and no pill
-   changes width -- a spinner here pushed its neighbours along every time.
+   changes width -- a spinner here pushed its neighbors along every time.
    Most pages arrive within a frame or two and it never shows; the universe has
    a chunk worth waiting for, and the click used to look ignored. */
 .showcase-pill.is-busy::before {
@@ -813,7 +820,7 @@ html.is-scene-dragging * {
 }
 
 /* Lit (hovered or current), the plate is clear, so the lines take the panel's
-   own colour instead of reading as dark scratches on nothing. */
+   own color instead of reading as dark scratches on nothing. */
 .showcase-pill.is-busy:hover::before,
 .showcase-pill.is-busy.active::before {
   background-image: repeating-linear-gradient(

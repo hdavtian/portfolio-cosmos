@@ -151,6 +151,9 @@ function glowTexture(
 const SHIP_MODEL_URL = "/models/falcon2/falcon2.glb";
 /** The ship's length, in the fly-by's units (the passes are laid out for this). */
 const SHIP_SIZE = 7;
+/** The engine flare's largest size and a trail glow's, in world units (for the on-screen check). */
+const FLARE_SIZE = 3.7;
+const TRAIL_SIZE = 2.6;
 /** Imported engines can be authored very bright; capped so the grille stays readable. */
 const MAX_EMISSIVE = 1.2;
 
@@ -312,8 +315,16 @@ const BOLT_POOL = 16;
 const FRONT_ENTER = 42;
 const FRONT_LEAVE = 52;
 
-/** A pass ends once the ship has been seen and has left the view (or after this long). */
-const PASS_MAX_SECONDS = 8;
+/*
+ * A pass ends once the ship has been seen and has left the view, or has
+ * shrunk into the distance to a dot this many CSS pixels long. It never just
+ * vanishes while it can still be made out. The camera sees far enough
+ * (CAMERA_FAR) that it always becomes a dot before it could be clipped.
+ */
+const DOT_PX = 3;
+const CAMERA_FAR = 6000;
+/** A backstop only, should a pass ever hang on screen; normal passes end well before it. */
+const PASS_MAX_SECONDS = 90;
 
 export function createFlyby(THREE: ThreeModule, canvas: HTMLCanvasElement): Flyby {
   const renderer = new THREE.WebGLRenderer({ canvas, alpha: true, antialias: true, powerPreference: "high-performance" });
@@ -325,7 +336,30 @@ export function createFlyby(THREE: ThreeModule, canvas: HTMLCanvasElement): Flyb
   let drawn = false;
 
   const scene = new THREE.Scene();
-  const camera = new THREE.PerspectiveCamera(50, 1, 0.5, 800);
+  const camera = new THREE.PerspectiveCamera(50, 1, 0.5, CAMERA_FAR);
+  // Screen pixels per world unit at distance 1, for telling when the ship is a
+  // dot and whether any of it is still on screen.
+  let pxPerUnit = 1;
+  let halfWidthPx = 1;
+  let halfHeightPx = 1;
+  const updateScreen = (width: number, height: number) => {
+    pxPerUnit = height / (2 * Math.tan(THREE.MathUtils.degToRad(camera.fov / 2)));
+    halfWidthPx = Math.max(1, width / 2);
+    halfHeightPx = Math.max(1, height / 2);
+  };
+  const screenPoint = new THREE.Vector3();
+  /** Whether anything within `radius` world units of `point` is on screen. */
+  const showsOnScreen = (point: THREE.Vector3, radius: number) => {
+    // The camera sits at the origin looking down -Z; nothing behind it shows.
+    if (point.z >= 0) return false;
+    screenPoint.copy(point).project(camera);
+    if (screenPoint.z >= 1) return false;
+    const radiusPx = (radius * pxPerUnit) / Math.max(1, point.length());
+    return (
+      Math.abs(screenPoint.x) * halfWidthPx < halfWidthPx + radiusPx &&
+      Math.abs(screenPoint.y) * halfHeightPx < halfHeightPx + radiusPx
+    );
+  };
   scene.add(new THREE.HemisphereLight(0xcfd8ff, 0x1a1610, 0.45));
   const key = new THREE.DirectionalLight(0xfff1dc, 2.6);
   key.position.set(-30, 45, 25);
@@ -367,7 +401,7 @@ export function createFlyby(THREE: ThreeModule, canvas: HTMLCanvasElement): Flyb
     const sprite = new THREE.Sprite(
       new THREE.SpriteMaterial({ map: glow, transparent: true, blending: THREE.AdditiveBlending, depthWrite: false, opacity: 0.45 * (1 - index / 10) }),
     );
-    sprite.scale.setScalar(2.6 * (1 - index / 12));
+    sprite.scale.setScalar(TRAIL_SIZE * (1 - index / 12));
     scene.add(sprite);
     return sprite;
   });
@@ -543,12 +577,19 @@ export function createFlyby(THREE: ThreeModule, canvas: HTMLCanvasElement): Flyb
       body.lookAt(ahead);
       body.rotateZ(bank);
 
-      // Done once it has been on screen and has left it.
+      // Done once it has been on screen and every part of it (hull, engine
+      // glow, trail) has left, or once it has dwindled to a dot. Never while
+      // a wing or the trail is still in sight.
       projected.copy(pass.position).project(camera);
-      const inView = projected.z < 1 && Math.abs(projected.x) < 1.15 && Math.abs(projected.y) < 1.15 && pass.position.z < 0;
+      const inView = projected.z < 1 && Math.abs(projected.x) < 1 && Math.abs(projected.y) < 1 && pass.position.z < 0;
       if (inView && !seen) seenAt = elapsed;
       if (inView) seen = true;
-      if ((seen && !inView) || elapsed > PASS_MAX_SECONDS) {
+      const anyShowing =
+        showsOnScreen(pass.position, SHIP_SIZE / 2 + FLARE_SIZE / 2) ||
+        history.some((point) => showsOnScreen(point, TRAIL_SIZE / 2));
+      const apparentPx = (SHIP_SIZE * pxPerUnit) / Math.max(1, pass.position.length());
+      const isDot = seen && apparentPx < DOT_PX;
+      if ((seen && !anyShowing) || isDot || elapsed > PASS_MAX_SECONDS) {
         pass = null;
         bursts = [];
         // Back under the text for the bolts still in the air and the next pass.
@@ -595,6 +636,7 @@ export function createFlyby(THREE: ThreeModule, canvas: HTMLCanvasElement): Flyb
       renderer.setSize(width, height, false);
       camera.aspect = width / Math.max(1, height);
       camera.updateProjectionMatrix();
+      updateScreen(width, height);
     },
     dispose() {
       scene.traverse((object) => {
