@@ -527,8 +527,11 @@ export function SceneStage({ projects, techStack, highlights, portfolio, profile
       let frame = 0;
       let last = performance.now();
       let preloadAccumulator = 0;
+      // The scene last drawn, so a scene hears when it comes (back) on screen.
+      let shownId: string | null = null;
       const render = (now: number) => {
         if (pausedRef.current) {
+          shownId = null;
           // Stop the loop rather than spin through it drawing nothing. A paused
           // scene used to keep asking for a frame ~60 times a second for as long
           // as the visitor stayed away, competing with whatever page they were
@@ -557,6 +560,10 @@ export function SceneStage({ projects, techStack, highlights, portfolio, profile
           if (!scene) continue;
           const progress = scene.progress();
           if (definition.id === activeRef.current) {
+            if (shownId !== definition.id) {
+              shownId = definition.id;
+              scene.onShow?.();
+            }
             // The peek plays each scene fast: several ordinary steps per frame.
             const speed = peekRef.current.phase === "preview" ? PEEK_SPEED : 1;
             for (let step = 0; step < Math.floor(speed); step += 1) scene.update(dt, smoothed, true);
