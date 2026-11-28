@@ -99,6 +99,12 @@ export interface ShowcaseScene {
    */
   setPeek?(on: boolean): void;
   /**
+   * The scene has just come on screen (the tour or a pick switched to it, or
+   * the page came back from a pause). Scenes otherwise carry on from where
+   * they stopped; one with a sequence to play from the top restarts it here.
+   */
+  onShow?(): void;
+  /**
    * How long the slow tour shows this scene, in ms, for a scene whose own
    * sequence has a natural end (it moves on as the sequence ends, rather than
    * restarting it). Without it the tour's usual interval applies.

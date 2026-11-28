@@ -241,6 +241,12 @@ export async function createGotSkillzScene(THREE: ThreeModule, data: SceneData):
       // Out of the peek, the slow tour's loop starts from its opening.
       if (!on) shownAt = null;
     },
+    onShow() {
+      // Each showing plays the loop from the sun. The host draws only the
+      // scene on screen, so without this the clock kept running from the
+      // first showing and the loop resumed wherever it had got to.
+      shownAt = null;
+    },
     update(dt: number, pointer: ScenePointer, visible: boolean) {
       if (!visible) {
         shownAt = null;
@@ -299,7 +305,10 @@ export async function createGotSkillzScene(THREE: ThreeModule, data: SceneData):
       // the place, where it settles low and near, drifting with the pointer.
       const back = smooth(TREE_START - 2, TREE_START + 5, t);
       drift.set(pointer.x * 30, -pointer.y * 16, 0);
-      const orbit = -0.9 + back * 1.3 + clock * 0.02 * back;
+      // The slow drift round the place runs on the loop's own time (t), never
+      // the total clock: multiplied into the swing, a clock left running for an
+      // hour made the camera spin a dozen turns in 7 seconds.
+      const orbit = -0.9 + back * 1.3 + t * 0.02 * back;
       const reach = engine.reach * 2.4;
       const rise = engine.top * 0.5;
       const place = new THREE.Vector3(PLACE.x, 26 + 1.5, PLACE.y);
