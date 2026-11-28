@@ -711,12 +711,14 @@ export function SceneStage({ projects, techStack, highlights, portfolio, profile
         // The same value drives the small timer under the active scene in the
         // gear panel, so the two always agree (it used to be a CSS animation
         // of its own, which started late and ran on through pauses).
+        // A scene with a sequence of its own is shown for its length, not the usual interval.
+        const tourMs = (activeRef.current && scenesRef.current.get(activeRef.current)?.tourMs) || TOUR_INTERVAL_MS;
         const share =
           peek.phase === "preview"
             ? peek.slot / PEEK_SLOT_MS
             : peek.phase === "boom"
               ? 0
-              : (now - activeSinceRef.current) / TOUR_INTERVAL_MS;
+              : (now - activeSinceRef.current) / tourMs;
         const fill = `scaleX(${Math.min(1, Math.max(0, share)).toFixed(4)})`;
         if (barRef.current) barRef.current.style.transform = fill;
         if (plateTimerRef.current) plateTimerRef.current.style.transform = fill;
@@ -727,7 +729,7 @@ export function SceneStage({ projects, techStack, highlights, portfolio, profile
           autoTourRef.current &&
           activeRef.current &&
           !transitionRef.current &&
-          now - activeSinceRef.current > TOUR_INTERVAL_MS &&
+          now - activeSinceRef.current > tourMs &&
           now - lastInteractionRef.current > TOUR_IDLE_MS
         ) {
           const index = SCENE_DEFINITIONS.findIndex((definition) => definition.id === activeRef.current);

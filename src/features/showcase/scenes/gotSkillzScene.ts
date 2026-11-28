@@ -17,7 +17,8 @@ import type { SceneData, ScenePointer, ShowcaseScene, ThreeModule } from "./type
  * the peek's speed-up and random start apply; the slow tour keeps the loop.
  */
 
-// The loop, in seconds.
+// The loop, in seconds: 30 in all. The slow tour shows it once (tourMs) and
+// moves on as it fades to black, so the sun never comes round a second time.
 const SUN_LIT = 2.5;
 const RINGS_START = 3;
 const RING_EACH = 5;
@@ -25,7 +26,7 @@ const RING_GAP = 1.6;
 const ETCH_LEN = 5;
 const TREE_START = 14;
 const TREE_LEN = 11;
-const HOLD_UNTIL = 34;
+const HOLD_UNTIL = 27;
 const FADE_LEN = 3;
 const LOOP = HOLD_UNTIL + FADE_LEN;
 
@@ -226,6 +227,8 @@ export async function createGotSkillzScene(THREE: ThreeModule, data: SceneData):
   return {
     scene,
     camera,
+    // Shown once through in the slow tour, ending on the fade to black.
+    tourMs: LOOP * 1000,
     progress: () => 1,
     setPeek(on: boolean) {
       if (on === peekOn) return;
