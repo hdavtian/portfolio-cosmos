@@ -139,9 +139,11 @@ export function ShowcaseIndexPage() {
   // Read when the list mounts, i.e. on coming back from a project page.
   const [visitedIds] = useState(readVisitedProjects);
 
-  // While resting, every other sweep fills the watermark with a project's
-  // screenshot, swapped in while the names are at their faintest.
-  const [watermarkImage, setWatermarkImage] = useState<string | null>(null);
+  // While resting, every other sweep fills each name with its own project's
+  // screenshot, swapped in while the names are at their faintest. A project
+  // without one borrows another's, picked by its place in the list so
+  // neighbors don't match.
+  const [showTitleImages, setShowTitleImages] = useState(false);
   const watermarkImages = useMemo(
     () =>
       visible
@@ -149,6 +151,11 @@ export function ShowcaseIndexPage() {
         .filter((image): image is string => Boolean(image)),
     [visible],
   );
+  const titleImageFor = (image: string | undefined | null, index: number) =>
+    image ||
+    (watermarkImages.length
+      ? watermarkImages[index % watermarkImages.length]
+      : null);
   const listRef = useRef<HTMLUListElement>(null);
   useEffect(() => {
     const list = listRef.current;
@@ -166,16 +173,26 @@ export function ShowcaseIndexPage() {
       if (event.target !== list.querySelector(".showcase-list__title")) return;
       cycle += 1;
       if (cycle % 2 === 0) {
-        setWatermarkImage(null);
+        setShowTitleImages(false);
         return;
       }
-      const next =
-        watermarkImages[Math.floor(Math.random() * watermarkImages.length)];
-      const loader = new Image();
-      loader.onload = () => {
-        if (!cancelled) setWatermarkImage(next);
-      };
-      loader.src = next;
+      // Every name's image ready first (most are cached from the hover
+      // previews), so they fade in together; a slow one is not waited for long.
+      const loads = [...new Set(watermarkImages)].map(
+        (src) =>
+          new Promise<void>((resolve) => {
+            const loader = new Image();
+            loader.onload = () => resolve();
+            loader.onerror = () => resolve();
+            loader.src = src;
+          }),
+      );
+      const timeout = new Promise<void>((resolve) =>
+        window.setTimeout(resolve, 4_000),
+      );
+      void Promise.race([Promise.all(loads), timeout]).then(() => {
+        if (!cancelled) setShowTitleImages(true);
+      });
     };
     list.addEventListener("animationiteration", onIteration);
     return () => {
@@ -183,7 +200,7 @@ export function ShowcaseIndexPage() {
       list.removeEventListener("animationiteration", onIteration);
     };
   }, [restState, watermarkImages]);
-  const shownWatermark = restState === "resting" ? watermarkImage : null;
+  const titleImagesOn = restState === "resting" && showTitleImages;
   const opened = visible.find((project) => project.id === openId) ?? null;
   const filterCore = cores.find((core) => core.name === coreFilter);
 
@@ -375,14 +392,7 @@ export function ShowcaseIndexPage() {
 
   return (
     <div
-      className={`showcase-index${hovered ? " showcase-index--has-hover" : ""}${opened ? " showcase-index--has-open" : ""} is-${restState}${shownWatermark ? " has-watermark-image" : ""}`}
-      style={
-        shownWatermark
-          ? ({
-              "--watermark-image": `url("${shownWatermark}")`,
-            } as React.CSSProperties)
-          : undefined
-      }
+      className={`showcase-index${hovered ? " showcase-index--has-hover" : ""}${opened ? " showcase-index--has-open" : ""} is-${restState}${titleImagesOn ? " has-watermark-image" : ""}`}
     >
       {/* Where the 3D scenes don't run (phones, reduced motion) the D3 constellation stands in. */}
       {sceneShowing ? null : (
@@ -579,6 +589,14 @@ export function ShowcaseIndexPage() {
                   <span
                     className="showcase-list__title"
                     data-text={project.title}
+                    style={
+                      titleImagesOn &&
+                      titleImageFor(project.image, projectIndex)
+                        ? ({
+                            "--title-image": `url("${titleImageFor(project.image, projectIndex)}")`,
+                          } as React.CSSProperties)
+                        : undefined
+                    }
                   >
                     {project.title}
                   </span>

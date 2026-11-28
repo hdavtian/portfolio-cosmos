@@ -1748,9 +1748,10 @@ html.is-scene-dragging * {
 }
 
 /*
- * Image cycles: a project screenshot, fixed to the viewport like the light,
- * shows through every title at once and pans the opposite way to the drift,
- * with the light sheet still crossing over it.
+ * Image cycles: each name shows its own project's screenshot through its
+ * letters, sized to the name (a little wider, so it has room to pan) and
+ * panning the opposite way to the drift. The light sheet stays fixed to the
+ * viewport, so it still crosses all the names as one.
  */
 .showcase-index.is-resting.has-watermark-image .showcase-list__item:not(.is-open) .showcase-list__title {
   background-image:
@@ -1762,8 +1763,9 @@ html.is-scene-dragging * {
       rgba(var(--title-rgb), 0) 62%,
       rgba(var(--title-rgb), 0) 100%
     ),
-    var(--watermark-image);
-  background-size: 260vw 100vh, cover;
+    var(--title-image, none);
+  background-size: 260vw 100vh, 135% auto;
+  background-attachment: fixed, scroll;
   background-position: 100% 0, 0% 50%;
   mix-blend-mode: normal;
   opacity: 0.55;
