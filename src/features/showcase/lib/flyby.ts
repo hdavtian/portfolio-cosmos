@@ -35,6 +35,8 @@ export interface Flyby {
    * as the ship pulls away), so it seems to fly over the text and then behind it.
    */
   readonly inFront: boolean;
+  /** For checking flight paths in the browser: where the ship is and what it's doing, or null between passes. */
+  readonly debug: { position: THREE.Vector3; comingBack: boolean; brokeAway: boolean } | null;
   update(dt: number): void;
   /** Draws the ship on its canvas (and clears it once a pass is over). */
   render(): void;
@@ -185,7 +187,15 @@ async function loadShipModel(THREE: ThreeModule) {
   ship.add(model);
   box.setFromObject(ship);
   // The model's nose is +Z, so the engines are at the back, -Z.
-  return { ship, engines, rearZ: box.min.z, frontZ: box.max.z, halfWidth: box.max.x };
+  // The belly is the lowest point of the hull, -Y, measured from the visible
+  // parts only: the hidden landing gear hangs below it.
+  ship.updateMatrixWorld(true);
+  const hull = new THREE.Box3();
+  ship.traverseVisible((object) => {
+    if ((object as THREE.Mesh).isMesh) hull.expandByObject(object);
+  });
+  const bellyY = hull.isEmpty() ? box.min.y : hull.min.y;
+  return { ship, engines, rearZ: box.min.z, bellyY, halfWidth: box.max.x };
 }
 
 /*
@@ -221,8 +231,8 @@ const turn = (rate: number, from: number, to: number) => (t: number) =>
   rate * smooth(from, from + 0.7, t) * (1 - smooth(to, to + 0.7, t));
 const none = () => 0;
 
-export type PassKind = "flyover" | "overShoulder" | "passBy" | "bankAway" | "climbOut";
-const PASSES: PassKind[] = ["flyover", "overShoulder", "passBy", "bankAway", "climbOut"];
+export type PassKind = "flyover" | "overShoulder" | "passBy" | "bankAway" | "climbOut" | "outAndBack";
+const PASSES: PassKind[] = ["flyover", "overShoulder", "passBy", "bankAway", "climbOut", "outAndBack"];
 
 function makePass(THREE: ThreeModule, kind: PassKind): Pass {
   const side = Math.random() < 0.5 ? 1 : -1;
@@ -268,6 +278,16 @@ function makePass(THREE: ThreeModule, kind: PassKind): Pass {
         yawRate: turn(side * 0.55, 0.6, 4.5),
         pitchRate: turn(0.04, 0.6, 3),
       };
+    case "outAndBack":
+      // From just behind the viewer straight away down the middle, far out,
+      // where it turns back and comes in again (see COME_BACK_AT).
+      return {
+        position: v(rand(2, 5), rand(-3, 1), 14),
+        heading: v(-0.03, 0.035, -1).normalize(),
+        speed: 60,
+        yawRate: none,
+        pitchRate: none,
+      };
     default:
       // Low on one side, climbing across the view and out of the top, leveling a little.
       return {
@@ -279,6 +299,34 @@ function makePass(THREE: ThreeModule, kind: PassKind): Pass {
       };
   }
 }
+
+/*
+ * Coming back. A pass that carries the ship far out while it is still well on
+ * screen and heading away doesn't just fade off: it banks round and comes
+ * back toward the camera, then close in breaks away left, right, up or down,
+ * or flies straight past the viewer. The turn is steered (the heading turns
+ * toward an aim point at a limited rate, banking with it) and is tight enough
+ * at that distance to keep the ship on screen while it comes round.
+ */
+/**
+ * Distance from the camera at which a receding ship turns back: from here on
+ * wide screens, farther on narrow ones (where the turn needs more room), but
+ * never past the far limit, where it would be a speck.
+ */
+const COME_BACK_AT = 170;
+const COME_BACK_AT_MAX = 450;
+/** It turns back only while this close to the middle of the view (0 center, 1 edge). */
+const COME_BACK_CENTRAL = 0.5;
+/** The turn's radius, as a share of the half-view at that distance, and its rate limits (rad/s). */
+const COME_BACK_RADIUS_SHARE = 0.3;
+const COME_BACK_RATE: [number, number] = [0.45, 1.4];
+/** A heavy ship turning hard loses speed: this share of cruise through the turn, back to full once it points in. */
+const TURN_SPEED_SHARE = 0.55;
+/** Distance at which the inbound ship breaks away, and how hard it turns doing it. */
+const BREAK_AT = 70;
+const BREAK_RATE = 0.8;
+type Break = "left" | "right" | "up" | "down" | "straight";
+const BREAKS: Break[] = ["left", "right", "up", "down", "straight"];
 
 /*
  * Lasers. A pass fires by chance; when it does, one burst comes a moment after
@@ -303,6 +351,8 @@ const BOLT_LIFE_S = 1.3;
 /** Bolts spread off the heading by up to this (radians). */
 const BOLT_SPREAD = 0.012;
 const MUZZLE_FLASH_S = 0.07;
+/** How far below the belly the guns sit, so bolts start outside the hull (world units). */
+const BELLY_CLEARANCE = 0.15;
 const BOLT_POOL = 16;
 
 /*
@@ -376,7 +426,7 @@ export function createFlyby(THREE: ThreeModule, canvas: HTMLCanvasElement): Flyb
   let engines: Array<{ material: THREE.MeshStandardMaterial; base: number }> = [];
   let builtEngine: THREE.MeshBasicMaterial | null = null;
   let rearZ = -SHIP_SIZE / 2;
-  let frontZ = SHIP_SIZE / 2;
+  let bellyY = -SHIP_SIZE / 6;
   let halfWidth = SHIP_SIZE / 2;
   let ready = false;
   let loading = false;
@@ -385,10 +435,12 @@ export function createFlyby(THREE: ThreeModule, canvas: HTMLCanvasElement): Flyb
     // The built ship's nose is -Z; turn it to match the model (+Z).
     ship.rotation.y = Math.PI;
     ship.scale.setScalar(SHIP_SIZE / 9.6);
+    // Measured before it joins the body, so the box is in the body's own frame.
+    ship.updateMatrixWorld(true);
+    bellyY = new THREE.Box3().setFromObject(ship).min.y;
     body.add(ship);
     builtEngine = engineMaterial;
     rearZ = -3.1 * (SHIP_SIZE / 9.6);
-    frontZ = 4.75 * (SHIP_SIZE / 9.6);
     halfWidth = 3.1 * (SHIP_SIZE / 9.6);
     ready = true;
   };
@@ -439,7 +491,7 @@ export function createFlyby(THREE: ThreeModule, canvas: HTMLCanvasElement): Flyb
     group.add(core, sheath);
     group.visible = false;
     scene.add(group);
-    return { group, from: new THREE.Vector3(), direction: new THREE.Vector3(), delay: 0, age: 0, active: false };
+    return { group, from: new THREE.Vector3(), direction: new THREE.Vector3(), side: 1, delay: 0, age: 0, active: false, launched: false };
   });
   const redGlow = glowTexture(THREE, ["rgba(255, 235, 225, 1)", "rgba(255, 80, 60, 0.6)", "rgba(255, 30, 20, 0)"]);
   const muzzleFlash = new THREE.Sprite(
@@ -448,6 +500,8 @@ export function createFlyby(THREE: ThreeModule, canvas: HTMLCanvasElement): Flyb
   muzzleFlash.visible = false;
   scene.add(muzzleFlash);
   let flashLeft = 0;
+  /** Where the flash sits on the ship, so it rides along with the guns instead of trailing behind. */
+  const flashOnShip = new THREE.Vector3();
   /** Bursts still to come this pass, as seconds after the ship came into view. */
   let bursts: number[] = [];
   let seenAt = -1;
@@ -456,24 +510,39 @@ export function createFlyby(THREE: ThreeModule, canvas: HTMLCanvasElement): Flyb
   const spreadAxis = new THREE.Vector3();
   const boltsInFlight = () => bolts.some((bolt) => bolt.active);
 
-  const fireBurst = (current: Pass) => {
+  const fireBurst = () => {
     const count = Math.round(rand(BURST_BOLTS[0], BURST_BOLTS[1]));
     for (let index = 0; index < count; index += 1) {
       const bolt = bolts.find((candidate) => !candidate.active);
       if (!bolt) return;
       muzzleSide = -muzzleSide;
-      // From the front of the ship, either side of the nose. (The bolt starts
-      // a stagger later, by when the ship has moved on a little; at these
-      // speeds that gap is too small to see.)
-      bolt.from.set(muzzleSide * halfWidth * 0.28, 0, frontZ * 0.96).applyQuaternion(body.quaternion).add(current.position);
-      bolt.direction.copy(current.heading);
-      spreadAxis.set(Math.random() - 0.5, Math.random() - 0.5, Math.random() - 0.5).normalize();
-      bolt.direction.applyAxisAngle(spreadAxis, rand(0, BOLT_SPREAD)).normalize();
+      bolt.side = muzzleSide;
       bolt.delay = index * BOLT_STAGGER_S;
       bolt.age = 0;
       bolt.active = true;
+      bolt.launched = false;
       bolt.group.visible = false;
     }
+  };
+
+  /*
+   * A bolt leaves from the guns under the middle of the belly, just outside
+   * the hull, alternating a little either side of center. Where and which way
+   * are taken from the ship at the moment the bolt leaves, not when the burst
+   * began: over a burst's stagger the ship flies on two or three of its own
+   * lengths, and bolts placed at the start used to leave from far behind it.
+   */
+  const launchBolt = (bolt: (typeof bolts)[number], current: Pass) => {
+    // The gun this bolt leaves from, on the ship, then in the world.
+    flashOnShip.set(bolt.side * halfWidth * 0.12, bellyY - BELLY_CLEARANCE, 0);
+    bolt.from.copy(flashOnShip).applyQuaternion(body.quaternion).add(current.position);
+    bolt.direction.copy(current.heading);
+    spreadAxis.set(Math.random() - 0.5, Math.random() - 0.5, Math.random() - 0.5).normalize();
+    bolt.direction.applyAxisAngle(spreadAxis, rand(0, BOLT_SPREAD)).normalize();
+    bolt.launched = true;
+    // Leaving the guns now: a brief flash there.
+    muzzleFlash.position.copy(bolt.from);
+    flashLeft = MUZZLE_FLASH_S;
   };
 
   const updateBolts = (dt: number) => {
@@ -482,15 +551,18 @@ export function createFlyby(THREE: ThreeModule, canvas: HTMLCanvasElement): Flyb
       bolt.age += dt;
       const flight = bolt.age - bolt.delay;
       if (flight < 0) continue;
+      if (!bolt.launched) {
+        // The pass ended before this one's turn: it never fires.
+        if (!pass) {
+          bolt.active = false;
+          continue;
+        }
+        launchBolt(bolt, pass);
+      }
       if (flight > BOLT_LIFE_S) {
         bolt.active = false;
         bolt.group.visible = false;
         continue;
-      }
-      if (!bolt.group.visible) {
-        // Leaving the muzzle now: a brief flash there.
-        muzzleFlash.position.copy(bolt.from);
-        flashLeft = MUZZLE_FLASH_S;
       }
       // The tail stays at the muzzle until the bolt is full length, then it flies on.
       const travelled = flight * BOLT_SPEED;
@@ -504,7 +576,10 @@ export function createFlyby(THREE: ThreeModule, canvas: HTMLCanvasElement): Flyb
     }
     flashLeft = Math.max(0, flashLeft - dt);
     muzzleFlash.visible = flashLeft > 0;
-    if (muzzleFlash.visible) muzzleFlash.scale.setScalar(2.2 * (0.6 + flashLeft / MUZZLE_FLASH_S));
+    if (muzzleFlash.visible) {
+      muzzleFlash.scale.setScalar(2.2 * (0.6 + flashLeft / MUZZLE_FLASH_S));
+      if (pass) muzzleFlash.position.copy(flashOnShip).applyQuaternion(body.quaternion).add(pass.position);
+    }
   };
 
   let pass: Pass | null = null;
@@ -517,6 +592,52 @@ export function createFlyby(THREE: ThreeModule, canvas: HTMLCanvasElement): Flyb
   const ahead = new THREE.Vector3();
   const rear = new THREE.Vector3();
   const projected = new THREE.Vector3();
+  const toAim = new THREE.Vector3();
+  const turnAxis = new THREE.Vector3();
+  /** The come-back, once started: where it is steering for, how fast it turns, and whether it has broken away yet. */
+  let steer: { aim: THREE.Vector3; rate: number; broke: boolean } | null = null;
+  let cameBack = false;
+  /** The share of cruise speed it flies at now (eased; below 1 only through the turn back). */
+  let speedShare = 1;
+
+  /**
+   * A point near the camera, a little off center, so it comes in at an angle
+   * rather than dead on; less far to the side on a narrow screen.
+   */
+  const inboundAim = () => {
+    const across = 12 * Math.min(1, camera.aspect);
+    return new THREE.Vector3(rand(-across, across), rand(-4, 6), 0);
+  };
+  /** Where it heads to break away: well off one side, or just past the viewer. */
+  const breakAim = (kind: Break) => {
+    switch (kind) {
+      case "left":
+        return new THREE.Vector3(-45, rand(-4, 4), 15);
+      case "right":
+        return new THREE.Vector3(45, rand(-4, 4), 15);
+      case "up":
+        return new THREE.Vector3(rand(-6, 6), 35, 15);
+      case "down":
+        return new THREE.Vector3(rand(-6, 6), -30, 15);
+      default:
+        // Roars past just beside and above the viewer.
+        return new THREE.Vector3((Math.random() < 0.5 ? -1 : 1) * rand(3, 5), rand(1.5, 3), 60);
+    }
+  };
+
+  /** Turns the heading toward the aim at no more than `rate`; returns the turn's yaw rate, for banking. */
+  const steerToward = (current: Pass, aim: THREE.Vector3, rate: number, dt: number) => {
+    toAim.copy(aim).sub(current.position).normalize();
+    const angle = current.heading.angleTo(toAim);
+    if (angle < 1e-4 || dt <= 0) return 0;
+    turnAxis.crossVectors(current.heading, toAim);
+    // Dead astern there's no shortest way round: turn flat.
+    if (turnAxis.lengthSq() < 1e-8) turnAxis.copy(worldUp);
+    turnAxis.normalize();
+    const step = Math.min(angle, rate * dt);
+    current.heading.applyAxisAngle(turnAxis, step).normalize();
+    return (turnAxis.dot(worldUp) * step) / dt;
+  };
 
   return {
     get flying() {
@@ -524,6 +645,9 @@ export function createFlyby(THREE: ThreeModule, canvas: HTMLCanvasElement): Flyb
     },
     get inFront() {
       return inFront;
+    },
+    get debug() {
+      return pass ? { position: pass.position.clone(), comingBack: steer !== null, brokeAway: steer?.broke ?? false } : null;
     },
     preload() {
       if (loading || ready) return;
@@ -533,7 +657,7 @@ export function createFlyby(THREE: ThreeModule, canvas: HTMLCanvasElement): Flyb
           body.add(loaded.ship);
           engines = loaded.engines;
           rearZ = loaded.rearZ;
-          frontZ = loaded.frontZ;
+          bellyY = loaded.bellyY;
           halfWidth = loaded.halfWidth;
           ready = true;
         })
@@ -552,30 +676,83 @@ export function createFlyby(THREE: ThreeModule, canvas: HTMLCanvasElement): Flyb
       elapsed = 0;
       seen = false;
       bank = 0;
+      steer = null;
+      cameBack = false;
+      speedShare = 1;
       history.length = 0;
       body.visible = true;
       flare.visible = true;
     },
     update(dt: number) {
-      // Bolts fly on after the ship has gone.
-      updateBolts(dt);
-      if (!pass) return;
+      if (!pass) {
+        // Bolts fly on after the ship has gone.
+        updateBolts(dt);
+        return;
+      }
       elapsed += dt;
-      // Turn and pitch at the pass's rates, then fly on at cruise speed.
-      const yawRate = pass.yawRate(elapsed);
-      pass.heading.applyAxisAngle(worldUp, yawRate * dt);
-      right.crossVectors(pass.heading, worldUp).normalize();
-      pass.heading.applyAxisAngle(right, pass.pitchRate(elapsed) * dt).normalize();
-      pass.position.addScaledVector(pass.heading, pass.speed * dt);
+      // Turn and pitch at the pass's rates (or steer, coming back), then fly
+      // on at cruise speed.
+      let yawRate: number;
+      let speedTarget = 1;
+      if (steer) {
+        // Once past the point it broke away for, it flies straight on (steering
+        // further would only circle it back).
+        const passedAim = steer.broke && pass.heading.dot(toAim.copy(steer.aim).sub(pass.position)) <= 0;
+        yawRate = passedAim ? 0 : steerToward(pass, steer.aim, steer.rate, dt);
+        // Slowed through the turn back, until it points in (within about 20 degrees).
+        const pointsIn = pass.heading.dot(toAim.copy(steer.aim).sub(pass.position).normalize()) > 0.94;
+        if (!steer.broke && !pointsIn) speedTarget = TURN_SPEED_SHARE;
+      } else {
+        yawRate = pass.yawRate(elapsed);
+        pass.heading.applyAxisAngle(worldUp, yawRate * dt);
+        right.crossVectors(pass.heading, worldUp).normalize();
+        pass.heading.applyAxisAngle(right, pass.pitchRate(elapsed) * dt).normalize();
+      }
+      speedShare += (speedTarget - speedShare) * (1 - Math.exp(-4 * dt));
+      const speed = pass.speed * speedShare;
+      pass.position.addScaledVector(pass.heading, speed * dt);
+
+      const range = pass.position.length();
+      // The view's narrower half-width per unit of distance. On a tall phone
+      // screen the view is narrow, so the turn waits until it is farther out,
+      // where the same turn takes up less of the screen.
+      const halfViewPerUnit = Math.tan(THREE.MathUtils.degToRad(camera.fov / 2)) * Math.min(1, camera.aspect);
+      const turnRadius = (pass.speed * TURN_SPEED_SHARE) / COME_BACK_RATE[1];
+      const comeBackAt = THREE.MathUtils.clamp(
+        turnRadius / (COME_BACK_RADIUS_SHARE * halfViewPerUnit),
+        COME_BACK_AT,
+        COME_BACK_AT_MAX,
+      );
+      if (!steer && !cameBack && seen && range > comeBackAt) {
+        // Far out, heading away, and still well inside the view: come back.
+        projected.copy(pass.position).project(camera);
+        const headingAway = pass.heading.dot(toAim.copy(pass.position).normalize()) > 0.5;
+        const central = Math.abs(projected.x) < COME_BACK_CENTRAL && Math.abs(projected.y) < COME_BACK_CENTRAL;
+        if (headingAway && central) {
+          // Tight enough that the turn's width stays a fraction of the view there.
+          const halfView = halfViewPerUnit * range;
+          const rate = THREE.MathUtils.clamp(
+            (pass.speed * TURN_SPEED_SHARE) / (COME_BACK_RADIUS_SHARE * halfView),
+            COME_BACK_RATE[0],
+            COME_BACK_RATE[1],
+          );
+          steer = { aim: inboundAim(), rate, broke: false };
+          cameBack = true;
+        }
+      } else if (steer && !steer.broke && range < BREAK_AT) {
+        steer = { aim: breakAim(BREAKS[Math.floor(Math.random() * BREAKS.length)]), rate: BREAK_RATE, broke: true };
+      }
 
       // Nose along the heading, banked into the turn (right wing down for a
       // right turn), eased so the roll never snaps.
-      const targetBank = THREE.MathUtils.clamp(Math.atan((-yawRate * pass.speed) / BANK_G), -MAX_BANK, MAX_BANK);
+      const targetBank = THREE.MathUtils.clamp(Math.atan((-yawRate * speed) / BANK_G), -MAX_BANK, MAX_BANK);
       bank += (targetBank - bank) * (1 - Math.exp(-3 * dt));
       body.position.copy(pass.position);
       ahead.copy(pass.position).add(pass.heading);
       body.lookAt(ahead);
       body.rotateZ(bank);
+      // After the ship is placed, so a bolt leaving now starts from where it is now.
+      updateBolts(dt);
 
       // Done once it has been on screen and every part of it (hull, engine
       // glow, trail) has left, or once it has dwindled to a dot. Never while
@@ -602,7 +779,7 @@ export function createFlyby(THREE: ThreeModule, canvas: HTMLCanvasElement): Flyb
       // Fire only while the ship is on screen, so the shots are seen leaving it.
       if (inView && bursts.length > 0 && elapsed - seenAt >= bursts[0]) {
         bursts.shift();
-        fireBurst(pass);
+        fireBurst();
       }
 
       // Engines: the grille brightens and flickers, a flare and trail behind.
