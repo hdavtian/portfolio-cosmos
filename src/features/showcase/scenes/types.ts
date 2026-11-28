@@ -99,6 +99,12 @@ export interface ShowcaseScene {
    */
   setPeek?(on: boolean): void;
   /**
+   * How long the slow tour shows this scene, in ms, for a scene whose own
+   * sequence has a natural end (it moves on as the sequence ends, rather than
+   * restarting it). Without it the tour's usual interval applies.
+   */
+  readonly tourMs?: number;
+  /**
    * Draws the frame, for a scene that needs more than one plain render (post
    * effects). The host has already applied the visitor's zoom and look-around
    * to the camera. Without it the host renders the scene directly.
